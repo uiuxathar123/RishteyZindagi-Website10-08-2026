@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789469311665,
+      "tag": "0000_nosy_polaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789681084863,
+      "tag": "0001_b2_auth_otp",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790067097920,
+      "tag": "0002_b3_profile_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790069462972,
+      "tag": "0003_b4_partner_preferences_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790278588555,
+      "tag": "0004_b5_gap_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790280764011,
+      "tag": "0005_b6_social_interaction",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790283702308,
+      "tag": "0006_b7_chat_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790286826738,
+      "tag": "0007_b8_membership_payment",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790564673672,
+      "tag": "0008_b10_security_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790567145773,
+      "tag": "0009_b11_push_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790790184743,
+      "tag": "0010_b13_performance_indexes",
+      "breakpoints": true
+    }
+  ]
+}

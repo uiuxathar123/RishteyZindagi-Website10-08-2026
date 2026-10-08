@@ -1,0 +1,249 @@
+/* Ported 1:1 from the approved RishteyZindagi 10-Years hero component
+   (rz-hero-component/styles.css) — same tokens, layout model and QA'd
+   breakpoints, just scoped as a CSS module for the Next.js app. */
+
+.heroRoot {
+  --rz-navy: #102C46;
+  --rz-maroon: #A51E3B;
+  --rz-red: #B51F40;
+  --rz-gold: #C99A45;
+  --rz-gold-soft: #E1BE83;
+  --rz-gold-rich: #B8863A;
+  --rz-gold-deep: #7A5A18;
+  --rz-champagne: #F4E5C4;
+  --rz-cream: #FFF9EF;
+  --rz-ivory: #FFFDF8;
+  --rz-peach: #F9E9DF;
+  --rz-ink: #23303F;
+  --rz-ink-soft: #5B6B7B;
+  /* Reads the self-hosted next/font variables set on <html> in
+     src/app/layout.tsx, so the hero uses the exact same Playfair
+     Display / DM Sans instances as the rest of the site (no duplicate
+     font download, no mismatch). */
+  --rz-font-serif: var(--font-serif), Georgia, serif;
+  --rz-font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --rz-radius-lg: 18px;
+  --rz-shadow-card: 0 18px 50px rgba(20, 35, 50, 0.16);
+  --rz-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  position: relative;
+  overflow: hidden;
+}
+
+.background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(46% 40% at 78% 8%, rgba(255, 224, 168, 0.95) 0%, rgba(255, 224, 168, 0) 65%),
+    linear-gradient(180deg, #EAF2F6 0%, #F7ECDD 26%, #FBE7CE 46%, #F6DCC6 66%, #EFD2BE 100%);
+}
+
+.hills { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.hill { position: absolute; border-radius: 50%; filter: blur(20px); }
+.hill1 { width: 62vw; height: 62vw; left: -20vw; bottom: -36vw; background: radial-gradient(circle at 42% 28%, #C9CF9E 0%, #AEB884 45%, transparent 72%); opacity: 0.55; }
+.hill2 { width: 48vw; height: 48vw; left: 8vw; bottom: -28vw; background: radial-gradient(circle at 50% 28%, #DCC79B 0%, #C7A96E 50%, transparent 72%); opacity: 0.42; }
+.hill3 { width: 42vw; height: 42vw; right: -12vw; bottom: -24vw; background: radial-gradient(circle at 50% 28%, #E7CBA4 0%, #D8AE7C 50%, transparent 72%); opacity: 0.4; }
+
+.overlay {
+  position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(180deg, rgba(255, 249, 239, 0.2) 0%, rgba(255, 249, 239, 0.02) 32%, rgba(255, 249, 239, 0.4) 100%);
+  pointer-events: none;
+}
+
+.floral { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.branch { position: absolute; top: -18px; left: -10px; width: clamp(160px, 16vw, 240px); opacity: 0.85; display: none; }
+.branch svg { width: 100%; height: auto; display: block; }
+.petals { position: absolute; inset: 0; overflow: hidden; }
+.petal {
+  position: absolute; top: -30px;
+  width: var(--pw, 16px); height: calc(var(--pw, 16px) * 0.75);
+  background: linear-gradient(135deg, #F6C9D2 0%, #EDA9B8 60%, #E08FA0 100%);
+  border-radius: 60% 40% 65% 35% / 55% 45% 55% 45%;
+  opacity: 0;
+  animation: petalFloat var(--pd, 18s) linear infinite;
+  animation-delay: var(--pdelay, 0s);
+}
+@keyframes petalFloat {
+  0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: 0.6; }
+  85% { opacity: 0.45; }
+  100% { transform: translate3d(var(--pdx, 80px), 640px, 0) rotate(280deg); opacity: 0; }
+}
+
+.container {
+  position: static; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 22px;
+  padding: 30px 18px 40px; max-width: 1600px; margin: 0 auto;
+}
+
+.searchCard {
+  position: static; order: 3; width: 100%; z-index: 10;
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: var(--rz-radius-lg);
+  box-shadow: var(--rz-shadow-card);
+  padding: 26px;
+}
+.searchHeading { font-family: var(--rz-font-serif); font-weight: 700; font-size: clamp(24px, 3vw, 38px); color: var(--rz-navy); margin: 0 0 10px; }
+.searchDesc { font-size: 15px; line-height: 1.6; color: var(--rz-ink-soft); margin: 0 0 22px; }
+.fields { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 0 0 18px; }
+.fieldFull { grid-column: 1 / -1; }
+
+.couple { position: static; order: 2; z-index: 5; width: min(62%, 320px); }
+.coupleFrame {
+  position: relative; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 20px;
+  background: linear-gradient(165deg, #F3D9C2 0%, #E7B896 40%, #D89A8B 70%, #B9707C 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+}
+.coupleFrame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; }
+.coupleFrame::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(16, 44, 70, 0.14) 0%, rgba(16, 44, 70, 0) 24%, rgba(16, 44, 70, 0) 58%, rgba(122, 23, 48, 0.16) 100%),
+    radial-gradient(120% 85% at 50% 0%, rgba(255, 224, 168, 0.22) 0%, rgba(255, 224, 168, 0) 55%);
+  mix-blend-mode: soft-light;
+}
+.coupleGlow { position: absolute; inset: -10%; z-index: -1; background: radial-gradient(60% 55% at 50% 35%, rgba(255, 224, 168, 0.55) 0%, rgba(255, 224, 168, 0) 70%); pointer-events: none; }
+
+.anniversary {
+  position: relative; order: 1; z-index: 8; width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.anniversary::before {
+  content: ""; position: absolute; inset: -28px -24px -16px -24px; z-index: -1; border-radius: 48px;
+  background: radial-gradient(62% 58% at 50% 40%, rgba(255, 249, 239, 0.82) 0%, rgba(255, 249, 239, 0.5) 52%, rgba(255, 249, 239, 0) 100%);
+  pointer-events: none;
+}
+.celebrating { font-family: var(--rz-font-sans); font-size: 12px; font-weight: 700; letter-spacing: 0.28em; color: var(--rz-navy); text-transform: uppercase; }
+.yearsRange { font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: var(--rz-gold-deep); margin-top: 4px; }
+
+.ringWrap { position: relative; width: clamp(270px, 22vw, 360px); height: clamp(270px, 22vw, 360px); display: flex; align-items: center; justify-content: center; margin: 10px 0 4px; }
+.ringBase { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(201, 154, 69, 0.65); box-shadow: 0 0 20px rgba(201, 154, 69, 0.2), 0 0 60px rgba(201, 154, 69, 0.08); }
+.ringBase2 { position: absolute; inset: 12px; border-radius: 50%; border: 1px solid rgba(201, 154, 69, 0.32); }
+.ringSweep {
+  position: absolute; inset: -4px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(201, 154, 69, 0.95) 34deg, transparent 88deg, transparent 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  animation: ringRotate 16s linear infinite;
+}
+@keyframes ringRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.ringInner { position: absolute; inset: 16px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #FFFDF8 0%, #FBF1DE 70%, var(--rz-champagne) 100%); box-shadow: inset 0 2px 10px rgba(165, 30, 59, 0.06); }
+
+.ringAccents { position: absolute; inset: -14%; z-index: 1; pointer-events: none; }
+.ringStar {
+  position: absolute; width: var(--rsz, 9px); height: var(--rsz, 9px); background: #FFFDF8;
+  clip-path: polygon(50% 0%, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0% 50%, 39% 39%);
+  filter: drop-shadow(0 0 5px rgba(201, 154, 69, 0.6));
+  animation: twinkleStar 2.6s ease-in-out infinite; animation-delay: var(--rsdelay, 0s);
+}
+@keyframes twinkleStar { 0%, 100% { opacity: 0.35; transform: scale(0.75) rotate(0deg); } 50% { opacity: 1; transform: scale(1.05) rotate(8deg); } }
+.ringFlare {
+  position: absolute; width: var(--rfz, 46px); height: var(--rfz, 46px); border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 224, 168, 0.85) 0%, rgba(255, 224, 168, 0) 70%);
+  animation: flarePulse 5.5s ease-in-out infinite; animation-delay: var(--rfdelay, 0s);
+}
+@keyframes flarePulse { 0%, 100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 0.85; transform: scale(1.15); } }
+.ringPetal {
+  position: absolute; width: var(--rpw, 13px); height: calc(var(--rpw, 13px) * 0.75);
+  background: linear-gradient(135deg, #F6C9D2 0%, #EDA9B8 60%, #E08FA0 100%);
+  border-radius: 60% 40% 65% 35% / 55% 45% 55% 45%; opacity: 0.75;
+  animation: petalSway 4.8s ease-in-out infinite; animation-delay: var(--rpdelay, 0s);
+  transform: rotate(var(--rprot, 0deg));
+}
+@keyframes petalSway { 0%, 100% { transform: rotate(var(--rprot, 0deg)) translateY(0); } 50% { transform: rotate(calc(var(--rprot, 0deg) + 8deg)) translateY(-4px); } }
+
+.badgeContent { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.numeralWrap {
+  width: clamp(150px, 15vw, 210px);
+  filter: drop-shadow(0 10px 20px rgba(165, 30, 59, 0.3));
+}
+.years {
+  font-family: var(--rz-font-serif); font-weight: 800; font-style: italic;
+  font-size: clamp(30px, 3.1vw, 40px); letter-spacing: 0.02em; line-height: 1;
+  margin-top: -6px;
+  background: linear-gradient(160deg, var(--rz-red) 0%, var(--rz-maroon) 55%, #6E1226 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 1.4px var(--rz-gold-rich);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 4px 10px rgba(122, 90, 24, 0.35));
+}
+
+.sparkles { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.spark {
+  position: absolute; width: var(--sz, 7px); height: var(--sz, 7px); background: var(--rz-gold);
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  opacity: 0.25; animation: sparkle 3.4s ease-in-out infinite; animation-delay: var(--sdelay, 0s);
+}
+@keyframes sparkle { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+
+.eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--rz-navy); margin: 16px 0 12px; }
+.lead { font-size: 15.5px; line-height: 1.6; color: var(--rz-ink); margin: 0 0 8px; max-width: 420px; }
+.thanks { font-family: var(--rz-font-serif); font-style: italic; font-size: 16px; color: var(--rz-maroon); margin: 0; }
+
+.trust { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 22px 0 0; padding: 0; list-style: none; }
+.trustItem { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 92px; }
+.trustIcon {
+  width: 46px; height: 46px; border-radius: 50%; background: var(--rz-peach);
+  display: flex; align-items: center; justify-content: center; color: var(--rz-navy);
+  transition: transform 0.22s var(--rz-ease), background 0.22s var(--rz-ease), box-shadow 0.22s var(--rz-ease);
+}
+.trustItem:hover .trustIcon { transform: translateY(-3px) scale(1.06); background: var(--rz-champagne); box-shadow: 0 10px 20px -8px rgba(201, 154, 69, 0.5); }
+.trustLabel { font-size: 13px; font-weight: 600; color: var(--rz-navy); line-height: 1.3; }
+
+@media (min-width: 768px) {
+  .heroRoot { min-height: clamp(620px, 58vw, 800px); }
+  .container { position: absolute; inset: 0; display: block; padding: 0; max-width: 1600px; margin: 0 auto; }
+  .searchCard { position: absolute; left: 3.8%; top: 15%; width: clamp(360px, 34%, 600px); padding: clamp(22px, 2vw, 34px); }
+  .fields { grid-template-columns: 1fr 1fr; }
+  .couple { position: absolute; left: 34%; width: 33%; max-width: 460px; bottom: 0; }
+  .anniversary { position: absolute; right: 4%; top: 4%; width: 33%; max-width: 460px; max-height: none; }
+  .branch { display: block; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .searchCard { top: 8%; padding: 20px; }
+  .searchHeading { font-size: 24px; }
+  .searchDesc { font-size: 13.5px; margin-bottom: 16px; }
+  .fields { gap: 10px; margin-bottom: 14px; }
+  .couple { left: 33%; width: 30%; }
+  .anniversary { right: 2%; width: 36%; top: 2%; }
+  .ringWrap { width: 210px; height: 210px; }
+  .numeralWrap { width: 122px; }
+  .years { font-size: 24px; }
+  .eyebrow { font-size: 11px; }
+  .lead { font-size: 13.5px; }
+  .trust { gap: 14px 10px; }
+  .trustItem { width: 38%; }
+  .trustIcon { width: 38px; height: 38px; }
+  .trustLabel { font-size: 11px; }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .searchCard { top: 11%; width: clamp(360px, 33%, 520px); }
+  .couple { left: 34%; width: 32%; }
+  .anniversary { right: 3%; width: 35%; }
+  .ringWrap { width: 250px; height: 250px; }
+  .numeralWrap { width: 150px; }
+  .years { font-size: 30px; }
+  .trust { gap: 14px 10px; }
+  .trustItem { width: 40%; }
+}
+
+@media (max-width: 767px) {
+  .container { padding: 26px 18px 34px; gap: 20px; }
+  .couple { width: min(66%, 260px); }
+  .ringWrap { width: 272px; height: 272px; }
+  .numeralWrap { width: 150px; }
+  .years { font-size: 30px; }
+  .fields { grid-template-columns: 1fr; }
+  .trust { gap: 16px 12px; }
+  .trustItem { width: 40%; }
+  .branch { display: none; }
+  .petal:nth-child(n+5) { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petal, .ringSweep, .spark, .ringStar, .ringFlare, .ringPetal { animation: none !important; opacity: 0.4 !important; }
+}

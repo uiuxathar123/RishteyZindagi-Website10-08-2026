@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --font-sans and --font-serif are injected by next/font in
+   src/app/layout.tsx (self-hosted Google Fonts, no runtime network
+   request). tailwind.config.ts's fontFamily tokens read those custom
+   properties, with a system-font stack as the fallback chain. */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-rz-cream text-rz-text antialiased;
+  overflow-x: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus visibility used across interactive components */
+.rz-focus {
+  @apply outline-none focus-visible:ring-2 focus-visible:ring-rz-navy focus-visible:ring-offset-2 focus-visible:ring-offset-rz-cream;
+}
+
+@keyframes rz-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rz-fade-up {
+  animation: rz-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rz-petal-float {
+  0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: 0.6; }
+  85% { opacity: 0.45; }
+  100% { transform: translate3d(var(--pdx, 80px), 640px, 0) rotate(280deg); opacity: 0; }
+}
+.animate-rz-petal {
+  animation: rz-petal-float var(--pd, 18s) linear infinite;
+}
+
+@keyframes rz-ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-rz-ring {
+  animation: rz-ring-rotate 16s linear infinite;
+}

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "account_suspensions_active_user_idx" ON "account_suspensions" USING btree ("user_id") WHERE "account_suspensions"."lifted_at" IS NULL;
