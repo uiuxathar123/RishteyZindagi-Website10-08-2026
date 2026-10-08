@@ -11,6 +11,7 @@ import { ServiceUnavailableError } from "@/server/lib/errors";
 import { getEnv } from "@/server/config/env";
 import type { StorageProvider } from "./storage.types";
 import { LocalDiskStorageProvider } from "./local-disk.provider";
+import { S3StorageProvider } from "./s3.provider";
 
 let cached: StorageProvider | null = null;
 
@@ -24,12 +25,18 @@ export function getStorageProvider(): StorageProvider {
     return cached;
   }
 
-  // A real provider (e.g. "s3", "cloudinary") was requested but no such
+  // PCP: S3-compatible object storage (AWS S3, MinIO, R2, Spaces, …).
+  if (configured === "s3") {
+    cached = new S3StorageProvider();
+    return cached;
+  }
+
+  // A real provider (e.g. "cloudinary") was requested but no such
   // integration exists in this codebase yet — fail honestly rather than
   // silently using local disk (which would not survive across instances
   // and would contradict the configured intent) or fabricating success.
   throw new ServiceUnavailableError(
-    `Storage provider "${configured}" is not implemented. Only "local" is currently supported.`
+    `Storage provider "${configured}" is not implemented. Supported providers: "local" and "s3".`
   );
 }
 

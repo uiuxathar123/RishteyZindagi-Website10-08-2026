@@ -40,6 +40,11 @@ export interface CreateOrderParams {
    * to "SUCCESS" when omitted. Never read by checkout.controller.ts's
    * production call sites — passing it is only ever a test convenience. */
   simulateOutcome?: VerifyOutcomeStatus;
+  /** PCP: the internal payment row id — used by gateways that redirect the
+   * browser back to the site (PhonePe) so the return page knows which payment
+   * to verify. Never trusted for authorization (the verify route re-checks
+   * ownership). Ignored by every other provider. */
+  paymentId?: string;
 }
 
 export interface CreateOrderResult {
@@ -48,6 +53,33 @@ export interface CreateOrderResult {
    * a real gateway would return its own real order id here. */
   providerOrderId: string;
   raw?: unknown;
+  /** PCP: what the browser needs to complete payment. Contains ONLY public
+   * values (Razorpay's public key id, an order id, a redirect URL) — never a
+   * secret. Absent for the dev provider. */
+  clientCheckout?: ClientCheckoutData;
+}
+
+export type ClientCheckoutData =
+  | { provider: "RAZORPAY"; keyId: string; orderId: string; amount: number; currency: string }
+  | { provider: "PHONEPE"; redirectUrl: string };
+
+export interface RefundParams {
+  /** The gateway's own payment/transaction id (Razorpay `pay_…`). Unused by PhonePe, which refunds by merchant order id. */
+  providerPaymentId?: string;
+  /** The order/reference id stored on payments.gateway_reference. */
+  providerOrderId: string;
+  amountInSmallestUnit: number;
+  /** Internal unique refund id, sent to the gateway as receipt / merchantRefundId. */
+  refundRef: string;
+  reason: string;
+}
+
+export type RefundOutcomeStatus = "PENDING" | "PROCESSED" | "FAILED";
+
+export interface RefundResult {
+  providerRefundId: string;
+  status: RefundOutcomeStatus;
+  failureReason?: string;
 }
 
 export interface VerifyPaymentParams {
@@ -98,4 +130,8 @@ export interface PaymentGatewayProvider {
    * configured" or "configured but no real vendor SDK wired in" for
    * every real provider in this sandbox (see each provider's own file). */
   testConnection(): Promise<TestConnectionResult>;
+  /** PCP (optional — only Razorpay/PhonePe implement it). Initiates a refund at the gateway. */
+  refund?(params: RefundParams): Promise<RefundResult>;
+  /** PCP (optional). Re-reads a refund's state from the gateway. */
+  getRefundStatus?(params: { providerRefundId: string; refundRef: string }): Promise<RefundResult>;
 }

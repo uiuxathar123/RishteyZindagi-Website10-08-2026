@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { useAdminSession } from "./AdminSessionProvider";
 import { ActionError, Card, fieldIssue, KeyValue, Modal, NotAvailable, PageHeader, Pagination, ShortId, SuccessNote, td, th, useDebounced } from "./AdminUi";
 import type { AdminUserDetailFull, AdminWarningCategory } from "./adminTypes";
+import { ModerationPanel } from "./ModerationPanel";
 import { VerifyControls } from "./VerifyControls";
 
 type Tone = "success" | "gold" | "maroon" | "neutral" | "navy";
@@ -185,7 +186,6 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string; onClose: (
     <Modal title={u ? u.account.name : "Member"} variant="drawer" onClose={onClose}>
       <AsyncView data={detail.data} error={detail.error} loading={detail.loading} reload={detail.reload} skeleton={<ListSkeleton rows={5} />}>
         {({ user }) => {
-          const activeSuspension = user.suspensions.find((s) => !s.liftedAt);
           return (
             <div className="space-y-6">
               <section aria-labelledby="u-account">
@@ -233,9 +233,9 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string; onClose: (
 
               <section aria-labelledby="u-suspension">
                 <h3 id="u-suspension" className="mb-3 font-serif text-base font-semibold text-rz-navy">
-                  Suspension
+                  Moderation
                 </h3>
-                <SuspensionPanel userId={userId} activeSuspension={activeSuspension} history={user.suspensions} onDone={refresh} />
+                <ModerationPanel userId={userId} onDone={refresh} />
               </section>
 
               <section aria-labelledby="u-warnings">
@@ -328,69 +328,6 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string; onClose: (
         }}
       </AsyncView>
     </Modal>
-  );
-}
-
-function SuspensionPanel({
-  userId,
-  activeSuspension,
-  history,
-  onDone,
-}: {
-  userId: string;
-  activeSuspension?: { id: string; suspendedAt: string; reason: string | null };
-  history: Array<{ id: string; suspendedAt: string; liftedAt: string | null; reason: string | null }>;
-  onDone: () => void;
-}) {
-  const { can } = useAdminSession();
-  const [done, setDone] = useState(false);
-  const lift = useAction(() => adminApi.post<{ userId: string }>(`/users/${userId}/lift-suspension`));
-
-  async function onLift() {
-    setDone(false);
-    const res = await lift.run();
-    if (!res) return;
-    setDone(true);
-    onDone();
-  }
-
-  return (
-    <div className="space-y-3">
-      {activeSuspension ? (
-        <div className="rounded-md border border-rz-danger/30 bg-rz-danger/5 p-3 text-sm">
-          <p className="font-semibold text-rz-danger">Suspended since {formatDateTime(activeSuspension.suspendedAt)}</p>
-          {activeSuspension.reason && <p className="mt-1 text-rz-text">{activeSuspension.reason}</p>}
-        </div>
-      ) : (
-        <p className="text-sm text-rz-muted">No active suspension.</p>
-      )}
-
-      {activeSuspension &&
-        (can("users.suspend") ? (
-          <Button type="button" size="sm" disabled={lift.pending} onClick={onLift}>
-            {lift.pending ? "Lifting…" : "Lift suspension"}
-          </Button>
-        ) : (
-          <p className="text-[13px] text-rz-muted">Lifting a suspension requires the users.suspend permission (Super Admin).</p>
-        ))}
-      <ActionError error={lift.error} />
-      {done && <SuccessNote>Suspension lifted.</SuccessNote>}
-
-      {history.filter((s) => s.liftedAt).length > 0 && (
-        <ul className="space-y-1 text-[12.5px] text-rz-muted">
-          {history
-            .filter((s) => s.liftedAt)
-            .map((s) => (
-              <li key={s.id}>
-                Suspended {formatDate(s.suspendedAt)}, lifted {formatDate(s.liftedAt)}
-              </li>
-            ))}
-        </ul>
-      )}
-      <NotAvailable title="No manual suspend">
-        The platform has no manual-suspend action. Accounts are suspended automatically when five different members report them; staff can lift that suspension here.
-      </NotAvailable>
-    </div>
   );
 }
 

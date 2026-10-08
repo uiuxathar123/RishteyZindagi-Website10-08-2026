@@ -26,14 +26,6 @@ import { WEIGHT_CATEGORIES } from "./adminTypes";
 // OTP configuration
 // ---------------------------------------------------------------------------
 
-type OtpMethod = OtpConfig["activeMethod"];
-
-const METHODS: Array<{ value: OtpMethod; label: string; key: keyof OtpConfig["providers"] }> = [
-  { value: "SMS", label: "SMS", key: "sms" },
-  { value: "WHATSAPP", label: "WhatsApp", key: "whatsapp" },
-  { value: "EMAIL", label: "Email", key: "email" },
-];
-
 /** Numeric dials: key, label, hint, and the bounds the backend validates. */
 const OTP_NUMBERS: Array<{ key: keyof OtpConfig; label: string; hint: string; min: number; max: number }> = [
   { key: "otpLength", label: "Code length (digits)", hint: "4–10", min: 4, max: 10 },
@@ -47,7 +39,7 @@ const OTP_NUMBERS: Array<{ key: keyof OtpConfig; label: string; hint: string; mi
 export function OtpConfigPanel() {
   const cfg = useAsync((signal) => adminApi.get<OtpConfig>("/otp/config", { signal }), []);
   return (
-    <Card title="One-time passwords (OTP)" description="How sign-up, login on a new device and password-reset codes are delivered. Exactly one method is active at a time.">
+    <Card title="One-time passwords (OTP)" description="Code length, expiry and attempt limits for sign-up, new-device login, password-reset and account-recovery codes.">
       <div className="p-5">
         <AsyncView data={cfg.data} error={cfg.error} loading={cfg.loading} reload={cfg.reload} skeleton={<ListSkeleton rows={3} />}>
           {(config) => <OtpForm config={config} onSaved={(c) => cfg.setData(c)} />}
@@ -59,7 +51,6 @@ export function OtpConfigPanel() {
 
 function OtpForm({ config, onSaved }: { config: OtpConfig; onSaved: (c: OtpConfig) => void }) {
   const { devToolsAllowed } = useAdminSession();
-  const [method, setMethod] = useState<OtpMethod>(config.activeMethod);
   const [enabled, setEnabled] = useState(config.enabled);
   const [devMode, setDevMode] = useState(config.devMode);
   const [nums, setNums] = useState<Record<string, string>>(() =>
@@ -70,7 +61,6 @@ function OtpForm({ config, onSaved }: { config: OtpConfig; onSaved: (c: OtpConfi
 
   const patch = useMemo(() => {
     const body: Record<string, unknown> = {};
-    if (method !== config.activeMethod) body.activeMethod = method;
     if (enabled !== config.enabled) body.enabled = enabled;
     if (devMode !== config.devMode) body.devMode = devMode;
     for (const n of OTP_NUMBERS) {
@@ -79,7 +69,7 @@ function OtpForm({ config, onSaved }: { config: OtpConfig; onSaved: (c: OtpConfi
       if (v !== config[n.key]) body[n.key] = v;
     }
     return body;
-  }, [method, enabled, devMode, nums, config]);
+  }, [enabled, devMode, nums, config]);
 
   const dirty = Object.keys(patch).length > 0;
   const hasInvalidNumber = Object.values(patch).some((v) => typeof v === "number" && !Number.isInteger(v));
@@ -95,32 +85,9 @@ function OtpForm({ config, onSaved }: { config: OtpConfig; onSaved: (c: OtpConfi
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      <fieldset>
-        <legend className="mb-2 text-[12.5px] font-semibold text-rz-muted">Delivery method</legend>
-        <div role="radiogroup" aria-label="Delivery method" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {METHODS.map((m) => (
-            <label
-              key={m.value}
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm transition-colors",
-                method === m.value ? "border-rz-maroon bg-rz-maroon/5" : "border-rz-border hover:border-rz-maroon/40"
-              )}
-            >
-              <input type="radio" name="otp-method" value={m.value} checked={method === m.value} onChange={() => setMethod(m.value)} className="rz-focus mt-1 accent-rz-maroon" />
-              <span>
-                <span className="block font-semibold text-rz-text">{m.label}</span>
-                <span className="block text-[12px] text-rz-muted">
-                  {config.providers[m.key] ? "Provider settings stored" : "No provider settings stored"}
-                </span>
-              </span>
-            </label>
-          ))}
-        </div>
-        {fieldIssue(save.error, "activeMethod") && <p className="mt-1 text-[12.5px] text-rz-danger">{fieldIssue(save.error, "activeMethod")}</p>}
-        <p className="mt-2 text-[12.5px] text-rz-muted">
-          Live SMS, WhatsApp and email delivery vendors are not connected in this build. With development mode off, requests on those channels are refused by the server.
-        </p>
-      </fieldset>
+      <p className="rounded-md bg-rz-cream px-3 py-2 text-[12.5px] text-rz-muted">
+        The delivery provider (Email or Fast2SMS) is chosen in the “OTP delivery provider” card above. The settings below apply to whichever provider is active.
+      </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {OTP_NUMBERS.map((n) => {
@@ -183,7 +150,6 @@ function OtpForm({ config, onSaved }: { config: OtpConfig; onSaved: (c: OtpConfi
             type="button"
             variant="ghost"
             onClick={() => {
-              setMethod(config.activeMethod);
               setEnabled(config.enabled);
               setDevMode(config.devMode);
               setNums(Object.fromEntries(OTP_NUMBERS.map((n) => [n.key, String(config[n.key])])));

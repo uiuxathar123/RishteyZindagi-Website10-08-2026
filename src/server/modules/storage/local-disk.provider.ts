@@ -8,6 +8,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { assertSafeStorageKey } from "./storage-key";
 import type { StorageProvider, StorageUploadInput, StorageReadResult } from "./storage.types";
 
 const ROOT = path.resolve(process.cwd(), ".storage-local");
@@ -17,6 +18,7 @@ function resolveSafePath(key: string): string {
   // module ever generates itself is a random UUID-based path (see
   // profiles.service.ts), but this guard makes path traversal
   // structurally impossible regardless of what's passed in.
+  assertSafeStorageKey(key); // PCP: strict allow-list on top of the resolve() containment check below
   const resolved = path.resolve(ROOT, key);
   if (!resolved.startsWith(ROOT + path.sep) && resolved !== ROOT) {
     throw new Error("Invalid storage key.");

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAdminSession } from "./AdminSessionProvider";
 import { Card, KeyValue, NotAvailable, PageHeader } from "./AdminUi";
 import { PERMISSION_LABELS } from "./adminTypes";
+import { OtpProviderPanel } from "./OtpProviderPanel";
 import { MatchingWeightsPanel, OtpConfigPanel } from "./SettingsPanels";
 
 /** `/admin/settings` — the signed-in admin's own access, plus configuration their role may change. */
@@ -44,6 +45,7 @@ export function SettingsClient() {
 
       {can("platform.settings.manage") ? (
         <>
+          <OtpProviderPanel />
           <OtpConfigPanel />
           <MatchingWeightsPanel />
           {isSuper && (

@@ -334,6 +334,8 @@ export interface CheckoutResult {
   currency: string;
   gatewayName: string;
   status: "PENDING";
+  /** Present for real gateways: public data the browser needs to finish paying (never a secret). */
+  gatewayCheckout?: import("./pcp-types").ClientCheckoutData;
 }
 
 export interface PaymentView {
@@ -383,7 +385,7 @@ export interface WarningView {
 
 // --- admin -----------------------------------------------------------------
 export interface AdminIdentity {
-  admin: { id: string; name: string; email: string; role: "SUPER_ADMIN" | "STAFF_ADMIN" | string };
+  admin: { id: string; name: string; email: string; role: "SUPER_ADMIN" | "STAFF_ADMIN" | string; mustChangePassword?: boolean };
   permissions: string[];
 }
 
@@ -505,7 +507,7 @@ export interface AdminReport {
   resolvedAt: string | null;
 }
 
-export type OtpPurpose = "SIGNUP" | "LOGIN" | "FORGOT_PASSWORD" | "NEW_DEVICE";
+export type OtpPurpose = "SIGNUP" | "LOGIN" | "FORGOT_PASSWORD" | "NEW_DEVICE" | "ACCOUNT_RECOVERY";
 
 // --- discovery / interactions (agent C) ------------------------------------
 /** GET /profiles/:profileId — the backend picks the shape by who is asking. */

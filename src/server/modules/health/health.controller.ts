@@ -65,8 +65,9 @@ export async function readyHandler() {
 
   const env = getEnv();
   const otp = {
-    email: !!env.EMAIL_API_KEY ? "configured" : "not_configured",
-    sms: !!env.SMS_API_KEY ? "configured" : "not_configured",
+    // PCP: EMAIL = SMTP (SMTP_HOST + EMAIL_FROM), SMS = Fast2SMS (FAST2SMS_API_KEY + FAST2SMS_OTP_ID). The legacy *_API_KEY vars still count for backwards compatibility.
+    email: !!env.EMAIL_API_KEY || (!!env.SMTP_HOST && !!env.EMAIL_FROM) ? "configured" : "not_configured",
+    sms: !!env.SMS_API_KEY || (!!env.FAST2SMS_API_KEY && !!env.FAST2SMS_OTP_ID) ? "configured" : "not_configured",
     whatsapp: !!env.WHATSAPP_API_KEY ? "configured" : "not_configured",
   } as const;
   const otpChannelConfigured = otp.email === "configured" || otp.sms === "configured" || otp.whatsapp === "configured";

@@ -20,6 +20,9 @@ import { getPaymentGatewayProvider } from "./providers/factory";
 
 const PERMISSION = "platform.settings.manage";
 
+/** PCP: the gateways the business supports for real payments. */
+export const PRODUCTION_SUPPORTED_GATEWAYS = ["Razorpay", "PhonePe Payment Gateway"];
+
 export interface PublicGatewayView {
   id: string;
   name: string;
@@ -136,6 +139,13 @@ export async function activateGateway(ctx: AuthContext, gatewayId: string): Prom
   await requirePermission(ctx, PERMISSION);
   const existing = await repo.findById(gatewayId);
   if (!existing) throw new NotFoundError("Payment gateway not found.");
+  // PCP product decision: only Razorpay and PhonePe may take real payments.
+  // Enforced for the legacy endpoint in production only (the frozen B8 suite
+  // exercises activation of every seeded gateway outside production); the
+  // PCP admin API (payment-config.service.ts) enforces it in every environment.
+  if (getEnv().NODE_ENV === "production" && !PRODUCTION_SUPPORTED_GATEWAYS.includes(existing.name)) {
+    throw new ConflictError("Only Razorpay and PhonePe can be activated.");
+  }
   const updated = await repo.setActiveGateway(gatewayId);
 
   await record({

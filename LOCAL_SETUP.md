@@ -4,11 +4,11 @@ This gets the **complete application** (website + member dashboard + admin panel
 
 > **What you are running.** One Next.js 14 (App Router) + TypeScript project containing (a) the public website, member dashboard and admin panel, and (b) the REST backend under `/api/v1/*` (PostgreSQL + Drizzle ORM). Since phase **B16** the screens are **connected to the real backend** — there is no mock data behind any member or admin screen. The browser talks to a same-origin proxy (`/bff/*`) that keeps the session in an **httpOnly cookie**; the token is never in JavaScript, `localStorage` or the URL.
 
-Three things are **deliberately not live** (nothing is faked — see `FINAL_HANDOVER.md` §21–§25):
+> **Production Completion Phase (PCP) update.** The backend now contains real, production-grade adapters for **Razorpay and PhonePe** payments, **Email (SMTP) and Fast2SMS** OTP delivery, **S3-compatible storage**, WhatsApp/FCM notifications, account deletion + recovery, admin moderation, staff management, rate limiting, scheduled jobs and encrypted backups. **None of these has been called against the real vendor** (that needs *your* credentials — status **REQUIRES EXTERNAL CREDENTIALS**; see `PCP_RELEASE_READINESS_MATRIX.md`). On your own machine you can run everything without any vendor:
 
-1. **OTP delivery** — no SMS/WhatsApp/e-mail vendor is connected. Locally you use the built-in *development mode* (§8) which shows the code on screen.
-2. **Payment gateway** — no real gateway SDK is connected. Locally, checkout uses the built-in *dev gateway* and the screen says so.
-3. **Cloud storage** — photos/invoices go to local disk (`.storage-local/`).
+1. **OTP delivery** — use the built-in *development mode* (§8), which shows the code on screen (refused in production). Or point `SMTP_*` at a local mail catcher such as MailHog/Mailpit.
+2. **Payment gateway** — with no Razorpay/PhonePe credentials and `NODE_ENV=development`, checkout uses the built-in *dev gateway* and the screen says so. To exercise the real code paths locally, save **test-mode** credentials from the vendor in **Platform Settings → Payment gateway** (see `PAYMENT_SETUP.md`).
+3. **Storage** — photos/invoices go to local disk (`.storage-local/`) unless `STORAGE_PROVIDER=s3` (§13).
 
 ---
 
@@ -60,14 +60,15 @@ Edit both and replace every placeholder.
 | `INTERNAL_API_ORIGIN` | No | No | **B16.** Only if the app must call itself on a different internal address (reverse proxy / containers). Default `http://127.0.0.1:<PORT>`. |
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | No | No | **B16.** Shown on `/contact` and the footer. Empty = no address shown (none is invented). Inlined at build time. |
 | `PAYMENT_CREDENTIALS_ENCRYPTION_KEY` | Only to save gateway credentials | **Yes** | 64 hex chars: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `EMAIL_*`, `SMS_*`, `WHATSAPP_*`, `PUSH_*`, `RAZORPAY_*`, `CASHFREE_*`, `PAYU_*`, `PHONEPE_*`, `PAYTM_*`, `STORAGE_*` | No | Keys: yes | Leave blank locally (no real vendor integration exists) |
+| `SMTP_*`, `FAST2SMS_*`, `RAZORPAY_*`, `PHONEPE_*`, `S3_*`, `STORAGE_*`, `WHATSAPP_*`, `FCM_*`, `CRON_SECRET`, `BACKUP_*` | No | Keys: yes | Leave blank locally unless you want to try a feature with test credentials. Full list and meaning: `PRODUCTION_ENV_REFERENCE.md`. |
+| `CASHFREE_*`, `PAYU_*`, `PAYTM_*`, `EMAIL_PROVIDER`, `SMS_PROVIDER`, … | No | | Legacy placeholders from earlier phases; not usable, leave blank. |
 | `GST_RATE_PERCENT` | No | No | Default 18 — a **placeholder**, not verified tax law |
 
 ### `.env.test` (automated tests)
 
 Loaded only by `tests/setup.ts`; must point at the **test** database. See `.env.test.example` (`DATABASE_URL`, `NODE_ENV=test`, `AUTH_SECRET`, `SESSION_TTL_HOURS`, `APP_URL`, `API_URL`, 64-hex `PAYMENT_CREDENTIALS_ENCRYPTION_KEY`).
 
-## 5. Run migrations (11 migrations → 52 tables)
+## 5. Run migrations (12 migrations → 57 tables)
 
 ```bash
 npm run db:migrate
@@ -76,11 +77,11 @@ npm run db:migrate
 #   PowerShell:  $env:DATABASE_URL="postgresql://postgres:<password>@localhost:5432/rishteyzindagi_test"; npm run db:migrate; Remove-Item Env:DATABASE_URL
 ```
 
-B16 added **no migration**.
+Migration `0011_pcp_production_completion.sql` (Production Completion Phase) adds five tables (`account_bans`, `job_runs`, `payment_refunds`, `payment_webhook_events`, `rate_limit_counters`) plus additive columns; nothing existing is dropped.
 
 ## 6. Seed reference data
 
-Seeds admin roles and the 11 permissions, religions, mother tongues, educations, professions, countries, cities, marital statuses, **34 community groups** (B16), report/warning categories, the 5 payment-gateway rows and the 8 membership plans. Idempotent (safe to re-run). **The test suite needs this data in the test database too.**
+Seeds admin roles and the permissions (including `staff.manage`, `users.ban`, `users.suspend`, `platform.settings.manage`, `payments.review`, `audit.view`), religions, mother tongues, educations, professions, countries, cities, marital statuses, **34 community groups** (B16), report/warning categories, the payment-gateway rows (Razorpay is marked active but has no credentials, so checkout fails closed until you configure it) and the 8 membership plans (**placeholder prices** — re-running the seed resets them). Idempotent (safe to re-run). **The test suite needs this data in the test database too.**
 
 ```bash
 npm run db:seed
@@ -120,19 +121,16 @@ SEED_DEV_SUPER_ADMIN_PASSWORD=<choose a strong password>
 
 It is only created when `NODE_ENV=development` and `SEED_DEV_SUPER_ADMIN=true`. Never enable this outside local development.
 
-**Staff Admin** (limited: view users, verify profiles, resolve reports): there is no API/UI for creating staff (the panel says so). Insert one row with the project's own bcrypt hashing, e.g.:
+**More staff.** Sign in to `/admin/login` as Super Admin and open **Staff & Roles** (under *Super Admin*): create staff accounts (a one-time temporary password is shown once and must be changed at first sign-in), change roles, deactivate, reset passwords, and edit role permissions. There is no SQL step any more.
 
-```bash
-HASH=$(node -e 'console.log(require("bcryptjs").hashSync("ChooseAStrongPassword!",10))')
-psql -U postgres -d rishteyzindagi_dev -c "INSERT INTO admin_users (id,name,email,password_hash,role_id) SELECT gen_random_uuid(),'Staff One','staff@example.com','$HASH',id FROM admin_roles WHERE name='STAFF_ADMIN'"
-```
+**Production first Super Admin** (any environment where the dev seed is off): `npm run admin:create-super -- --email you@example.com --name "Your Name"` prints a one-time temporary password; sign in and you are forced to choose your own.
 
 ## 10. Run the checks
 
 ```bash
 npx tsc --noEmit     # type-check
-npm test             # ~8–12 minutes, needs the migrated + seeded TEST database
-npm run build        # production build
+npm test             # ~15–20 min on a 2-core machine (66 test files), needs the migrated + seeded TEST database
+npm run build        # production build (needs .env from §4 to exist — a build with no environment fails with "Invalid environment configuration")
 ```
 
 ## 11. Production build locally
@@ -152,15 +150,19 @@ npm run build && npm start
 | `npm run db:migrate` / `db:seed` | Apply migrations / seed reference data |
 | `npm test` / `npm run test:watch` | Vitest (real PostgreSQL test DB) |
 | `npm run check:prod-env` | Read-only production-readiness check of your env vars |
-| `scripts/backup-db.sh`, `restore-db.sh`, `deploy.sh` | Bash scripts (see `BACKUP_DR.md`, `DEPLOYMENT.md`) |
+| `npm run admin:create-super -- --email … --name "…"` | First Super Admin on a fresh database |
+| `npm run job -- --list` / `npm run job -- <name>` | Scheduled jobs (membership expiry, reminders, payment reconcile, deletion finalize, housekeeping) |
+| `npm run smoke:prod` / `smoke:gateway` | Real-HTTP smoke tests against a production build (see §17) |
+| `npm run smoke:ui` / `smoke:ui-gateway` | Headless-browser checks (need Playwright + Chromium, not repo dependencies) |
+| `scripts/backup-secure.sh`, `backup-offsite.ts`, `verify-restore.sh`, `restore-db.sh`, `backup-db.sh`, `deploy.sh` | Bash scripts (see `BACKUP_DR.md`, `DEPLOYMENT_PRODUCTION.md`) |
 
 ## 13. Photo / invoice storage
 
-Default (`STORAGE_PROVIDER` blank or `local`): files are written under `.storage-local/` (created automatically; git-ignored). Photos are only served through authenticated routes — the browser never receives a raw storage path. Any other `STORAGE_PROVIDER` value makes uploads fail on purpose (no cloud provider is implemented).
+Default (`STORAGE_PROVIDER` blank or `local`): files are written under `.storage-local/` (created automatically; git-ignored). Photos are only served through authenticated routes — the browser never receives a raw storage path. `STORAGE_PROVIDER=s3` selects the S3-compatible provider (AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces…): set `STORAGE_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (`S3_FORCE_PATH_STYLE=true` for MinIO). Objects are private and delivered through short-lived signed URLs or authenticated routes. Uploads are checked for size and real file type (magic bytes). Any other value makes uploads fail on purpose. Reachability of your bucket is **not** verified by `/health/ready` (configuration only) — upload a photo after deploying.
 
 ## 14. Credentials needed later (not available locally)
 
-OTP vendor (SMS/WhatsApp/e-mail) · payment gateway (Razorpay/Cashfree/PayU/PhonePe/Paytm — one at a time; a real SDK must be written) · push vendor · cloud object storage · secrets manager/KMS · hosting, domain, CI/CD. See `FINAL_HANDOVER.md` §21–§25.
+SMTP account · Fast2SMS API key + OTP route · Razorpay and/or PhonePe merchant credentials and webhook secrets (exactly one gateway is active at a time) · WhatsApp Cloud API / Firebase service account (optional) · S3-compatible bucket · off-box backup target and backup passphrase · hosting, domain, TLS, a scheduler for the jobs. Step-by-step: `PAYMENT_SETUP.md`, `FAST2SMS_SETUP.md`, `DEPLOYMENT_PRODUCTION.md`, `BACKUP_DR.md`.
 
 ## 15. Putting it on GitHub
 
@@ -184,3 +186,18 @@ Nothing has been initialised or pushed for you.
 * Signup works but “Show my verification code” never appears → dev mode is off, or `NODE_ENV=production`.
 * Dashboard keeps sending you to `/login` → your session expired or was revoked (password reset / “log out of all devices”).
 * Port 3000 busy → `npx next dev -p 3001`.
+
+## 17. Optional: run the real-HTTP smoke tests
+
+These start a production build of this app, a local protocol mock of each vendor, and drive the real HTTP API. They need the migrated **test** database (`.env.test`) and use only mocks — no real vendor is contacted.
+
+```bash
+npm run build
+export ADMIN_DATABASE_URL=postgresql://postgres:<password>@localhost:5432/postgres   # a role that may CREATE/DROP DATABASE; each run uses a throw-away database
+npm run smoke:prod       # 123 checks: auth, OTP via mock SMTP (STARTTLS), RBAC, IDOR, headers, rate limits, jobs, deletion/recovery, moderation, staff
+npm run smoke:gateway    # 52 checks: Razorpay + PhonePe orders, signatures, webhooks, refunds, gateway switching
+# browser checks (install Playwright without saving it to package.json):
+npm i --no-save playwright && PLAYWRIGHT_MODULE=playwright PLAYWRIGHT_CHROMIUM=/path/to/chromium npm run smoke:ui
+```
+
+Logs and screenshots go to the directory named by `SMOKE_LOG_DIR` / `SMOKE_SHOTS_DIR` (see the header of `scripts/smoke/run-smoke.sh`).

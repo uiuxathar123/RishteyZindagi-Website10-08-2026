@@ -83,6 +83,80 @@ const envSchema = z.object({
   // GST slab, chosen only as a clearly-labeled round placeholder, not
   // asserted as legally authoritative for this business).
   GST_RATE_PERCENT: z.coerce.number().min(0).max(100).default(18),
+
+  // ---------------------------------------------------------------------
+  // PCP — Production Completion Phase. Every variable below is optional at
+  // the schema level (same posture as every credential above): whether a
+  // feature is usable is decided at request time by its own isConfigured()
+  // check, never by crashing at start-up. Secrets here are read ONLY on
+  // the server and never reach the client bundle (no NEXT_PUBLIC_ prefix).
+  // ---------------------------------------------------------------------
+
+  // Payments — Razorpay (official Orders/Payments/Refunds API + webhooks).
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  // Test-server override. IGNORED when NODE_ENV=production (see
+  // payments/providers/http.ts) so production can never be pointed at a
+  // look-alike host through configuration.
+  RAZORPAY_API_BASE: z.string().optional(),
+
+  // Payments — PhonePe Standard Checkout (OAuth client credentials).
+  PHONEPE_CLIENT_ID: z.string().optional(),
+  PHONEPE_CLIENT_SECRET: z.string().optional(),
+  PHONEPE_CLIENT_VERSION: z.string().optional(),
+  PHONEPE_ENV: z.enum(["sandbox", "production"]).optional(),
+  PHONEPE_WEBHOOK_USERNAME: z.string().optional(),
+  PHONEPE_WEBHOOK_PASSWORD: z.string().optional(),
+  PHONEPE_API_BASE: z.string().optional(),
+  PHONEPE_AUTH_BASE: z.string().optional(),
+
+  // OTP — Fast2SMS (official OTP API) + SMTP e-mail.
+  FAST2SMS_API_KEY: z.string().optional(),
+  FAST2SMS_OTP_ID: z.string().optional(),
+  FAST2SMS_API_BASE: z.string().optional(), // ignored in production
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_SECURE: z.string().optional(), // "true" = implicit TLS (port 465)
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+
+  // Notifications — WhatsApp Cloud API / FCM HTTP v1.
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_TEMPLATE_NAME: z.string().optional(),
+  WHATSAPP_API_VERSION: z.string().optional(),
+  WHATSAPP_API_BASE: z.string().optional(), // ignored in production
+  FCM_PROJECT_ID: z.string().optional(),
+  FCM_CLIENT_EMAIL: z.string().optional(),
+  FCM_PRIVATE_KEY: z.string().optional(),
+  FCM_API_BASE: z.string().optional(), // ignored in production
+  FCM_TOKEN_URL: z.string().optional(), // ignored in production
+
+  // Storage — S3-compatible object storage (STORAGE_PROVIDER=s3).
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: z.string().optional(), // "true" for MinIO-style path addressing
+
+  // Rate limiting — "postgres" (shared across instances) or "memory"
+  // (single instance only). Unset = postgres in production, memory elsewhere.
+  RATE_LIMIT_STORE: z.enum(["postgres", "memory"]).optional(),
+  // Number of trusted reverse proxies in front of the app; the client IP is
+  // the Nth entry from the RIGHT of X-Forwarded-For. 0 = ignore the header.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).optional(), // default 0
+
+  // Scheduled jobs: bearer secret for /api/v1/internal/jobs/* (>= 32 chars).
+  CRON_SECRET: z.string().optional(),
+
+  // Account deletion: days a DELETED_PENDING account can still be recovered.
+  ACCOUNT_RECOVERY_WINDOW_DAYS: z.coerce.number().int().min(1).max(365).optional(), // default 30
+  // Payments: outside production the dev gateway is used by default; set
+  // PAYMENT_PROVIDER_MODE=real to exercise the REAL Razorpay/PhonePe adapters
+  // (e.g. with sandbox credentials or a mock server). Ignored in production,
+  // where real providers are always used.
+  PAYMENT_PROVIDER_MODE: z.enum(["dev", "real"]).optional(),
+  // Payments: minutes after which an unresolved PENDING payment is closed.
+  PAYMENT_PENDING_EXPIRY_MINUTES: z.coerce.number().int().min(5).max(1440).optional(), // default 60
 });
 
 export type Env = z.infer<typeof envSchema>;

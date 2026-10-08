@@ -86,7 +86,13 @@ export function checkProductionReadiness(env: Env, allowedOriginsRaw?: string): 
     warnings.push('ALLOWED_ORIGINS is unset — CORS currently allows every origin ("*"), the pre-B10 default. Set an explicit allowlist before a real frontend/Android origin is fixed.');
   }
 
-  const otpConfigured = Boolean(env.EMAIL_API_KEY) || Boolean(env.SMS_API_KEY) || Boolean(env.WHATSAPP_API_KEY);
+  // PCP: SMTP e-mail and Fast2SMS count as configured delivery channels (additive OR).
+  const otpConfigured =
+    Boolean(env.EMAIL_API_KEY) ||
+    Boolean(env.SMS_API_KEY) ||
+    Boolean(env.WHATSAPP_API_KEY) ||
+    (Boolean(env.SMTP_HOST) && Boolean(env.EMAIL_FROM)) ||
+    (Boolean(env.FAST2SMS_API_KEY) && Boolean(env.FAST2SMS_OTP_ID));
   if (!otpConfigured) {
     warnings.push("No OTP delivery channel (EMAIL_API_KEY / SMS_API_KEY / WHATSAPP_API_KEY) is configured — matches GET /api/v1/health/ready's own 'degraded' signal, not a new finding.");
   }
@@ -101,6 +107,7 @@ export function checkProductionReadiness(env: Env, allowedOriginsRaw?: string): 
     (Boolean(env.CASHFREE_APP_ID) && Boolean(env.CASHFREE_SECRET_KEY)) ||
     (Boolean(env.PAYU_MERCHANT_KEY) && Boolean(env.PAYU_SALT)) ||
     (Boolean(env.PHONEPE_MERCHANT_ID) && Boolean(env.PHONEPE_SALT_KEY)) ||
+    (Boolean(env.PHONEPE_CLIENT_ID) && Boolean(env.PHONEPE_CLIENT_SECRET)) ||
     (Boolean(env.PAYTM_MERCHANT_ID) && Boolean(env.PAYTM_MERCHANT_KEY));
   if (!anyPaymentGatewayConfigured) {
     warnings.push("No payment gateway has both of its credential vars set — every real gateway provider throws ServiceUnavailableError until real credentials are configured (see each provider's own file comment); checkout will not work for real money until then.");

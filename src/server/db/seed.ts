@@ -40,6 +40,9 @@ const PERMISSIONS = [
   { key: "profiles.verify", description: "Approve or reject profile verification." },
   { key: "reports.resolve", description: "Resolve or dismiss user reports." },
   { key: "staff.manage", description: "Invite, role-change or disable staff/admin accounts." },
+  // PCP: banning is a stronger action than suspending, so it is its own
+  // permission (SUPER_ADMIN only by default; never in STAFF_ADMIN defaults).
+  { key: "users.ban", description: "Ban (block) or unban member accounts." },
   { key: "platform.settings.manage", description: "Change platform-wide settings (gateway, OTP channel, flags)." },
   // B6: no existing permission fit issuing a warning or managing report
   // categories, so these two are new and narrowly scoped — see

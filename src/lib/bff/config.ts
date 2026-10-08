@@ -29,6 +29,9 @@ export const PUBLIC_AUTH_PATHS = new Set([
   "auth/verify-login-otp",
   "auth/forgot-password",
   "auth/reset-password",
+  // PCP: a pending-deletion account has no session, so recovery runs signed out.
+  "auth/recover-account/request",
+  "auth/recover-account/confirm",
   "admin/login",
 ]);
 

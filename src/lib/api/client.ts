@@ -44,7 +44,7 @@ export function setUnauthorizedHandler(fn: UnauthorizedHandler | null) {
 
 /** Auth-entry calls legitimately 401 (wrong password, wrong code) — those
  * must show an inline message, not trigger a redirect. */
-const NO_REDIRECT_ON_401 = /^\/(auth\/(login|verify-|request-login-otp|set-password|register|resend-otp|forgot-password|reset-password)|login)/;
+const NO_REDIRECT_ON_401 = /^\/(auth\/(login|verify-|request-login-otp|set-password|register|resend-otp|forgot-password|reset-password|recover-account\/)|login)/;
 
 function parseErrorBody(payload: unknown, status: number): ApiError {
   const err = (payload as { error?: { code?: string; message?: string; details?: unknown } } | null)?.error;
@@ -108,6 +108,8 @@ function makeClient(realm: Realm, prefix: string) {
     get: <T>(path: string, opts?: Omit<RequestOptions, "body" | "formData">) => request<T>(realm, prefix, "GET", path, opts),
     post: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "body">) =>
       request<T>(realm, prefix, "POST", path, { ...opts, body: body ?? {} }),
+    put: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "body">) =>
+      request<T>(realm, prefix, "PUT", path, { ...opts, body: body ?? {} }),
     patch: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "body">) =>
       request<T>(realm, prefix, "PATCH", path, { ...opts, body: body ?? {} }),
     delete: <T>(path: string, opts?: Omit<RequestOptions, "body" | "formData">) => request<T>(realm, prefix, "DELETE", path, opts),

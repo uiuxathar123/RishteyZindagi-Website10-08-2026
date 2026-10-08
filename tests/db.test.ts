@@ -8,7 +8,7 @@ describe("database", () => {
     expect(result.rows[0]).toEqual({ one: 1 });
   });
 
-  it("has every migration applied — all 48 B1+B2 tables exist, plus B5 gap-fix's additive matching_weight_configs, B6's additive behaviour_events/account_suspensions, and B11's additive device_push_tokens (52 total)", async () => {
+  it("has every migration applied — all 48 B1+B2 tables exist, plus B5 gap-fix's additive matching_weight_configs, B6's additive behaviour_events/account_suspensions, B11's additive device_push_tokens, and PCP's five additive production tables (57 total)", async () => {
     const result = await db.execute(sql`
       select table_name from information_schema.tables
       where table_schema = 'public' and table_type = 'BASE TABLE'
@@ -87,6 +87,15 @@ describe("database", () => {
       // a future-phase gap. Every prior assertion in this list is
       // unchanged.
       "device_push_tokens",
+      // PCP (Production Completion Phase — owner-approved update of this
+      // exact-count list, same precedent as B5/B6/B11; see
+      // PRODUCTION_COMPLETION_AUDIT.md conflict C7): five additive tables
+      // from drizzle/0011_pcp_production_completion.sql.
+      "payment_webhook_events",
+      "payment_refunds",
+      "account_bans",
+      "job_runs",
+      "rate_limit_counters",
     ];
 
     for (const table of expected) {

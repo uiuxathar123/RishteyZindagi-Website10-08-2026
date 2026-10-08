@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { ActionError, fieldIssue, Modal, NotAvailable, PageHeader, Pagination, ShortId, SuccessNote, td, th, useDebounced } from "./AdminUi";
 import type { AdminInvoiceRow, AdminMembershipRow, AdminPaymentRow, AdminPaymentsResponse, Page } from "./adminTypes";
 import { revenueRows } from "./OverviewClient";
+import { RefundModal } from "./RefundModal";
 
 type Tone = "success" | "gold" | "maroon" | "neutral" | "navy";
 const PAYMENT_TONE: Record<string, Tone> = { SUCCESS: "success", PENDING: "gold", FAILED: "maroon", REFUNDED: "navy" };
@@ -151,6 +152,7 @@ function PaymentsTab() {
   const [page, setPage] = useState(1);
   const [notice, setNotice] = useState<string | null>(null);
   const [activating, setActivating] = useState<AdminPaymentRow | null>(null);
+  const [refunding, setRefunding] = useState<AdminPaymentRow | null>(null);
   useEffect(() => setPage(1), [status]);
 
   const list = useAsync(
@@ -220,6 +222,11 @@ function PaymentsTab() {
                             Verify manually
                           </Button>
                         )}
+                        {(p.status === "SUCCESS" || p.status === "REFUNDED") && p.currency && (
+                          <Button type="button" size="sm" variant="outline" onClick={() => { setNotice(null); setRefunding(p); }}>
+                            Refunds
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -230,6 +237,10 @@ function PaymentsTab() {
           </div>
         )}
       </AsyncView>
+
+      {refunding && refunding.currency && (
+        <RefundModal paymentId={refunding.id} currency={refunding.currency} onClose={() => setRefunding(null)} onChanged={() => list.reload()} />
+      )}
 
       {activating && (
         <ReasonModal

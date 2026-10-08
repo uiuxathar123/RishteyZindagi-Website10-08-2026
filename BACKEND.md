@@ -6822,3 +6822,33 @@ All production safeguards are unchanged and were re-verified on a production bui
 * No staff-management API exists; staff accounts are created by SQL (`LOCAL_SETUP.md` §9).
 
 **B16b IMPLEMENTATION: PASS — FROZEN.** B1–B15 = FROZEN.
+
+---
+
+## 62. Production Completion Phase (PCP) — backend additions
+
+Read `PRODUCTION_COMPLETION_AUDIT.md` (written before any code) for the gap analysis, `PCP_FINAL_REPORT.md` for the evidence and `PCP_KNOWN_LIMITATIONS.md` for what is not done. B1–B16b remain frozen; the handful of frozen files that had to change are listed in the last table of `PCP_KNOWN_LIMITATIONS.md`.
+
+### 62.1 What was added, by module
+
+| Area | Where | Notes |
+|---|---|---|
+| Migration `0011_pcp_production_completion.sql` | `drizzle/`, `src/server/db/schema.ts` | Five new tables (`account_bans`, `job_runs`, `payment_refunds`, `payment_webhook_events`, `rate_limit_counters`) plus additive columns → 57 tables. |
+| Payments | `modules/payments/` (`payment-config.*`, `credentials.ts`, `providers/razorpay*`, `providers/phonepe*`, `webhooks.*`, `refunds.*`, `razorpay-confirm.*`, `razorpay-resume.*`) | Exactly one gateway active (Razorpay or PhonePe) chosen by an admin. Credentials are saved encrypted (AES-256-GCM) or read from the environment; they never reach a response or log. Amount and currency always come from the stored plan, never the browser. Webhooks are authenticated (Razorpay HMAC over raw bytes; PhonePe Authorization hash), deduplicated in `payment_webhook_events`, and re-verify with the gateway before activating. Refunds are capped by the refundable balance and reconciled by a job. |
+| OTP | `modules/otp/` (`otp-provider.service.ts`, `providers/email.provider.ts`, `providers/sms.provider.ts`) | `EMAIL` or `FAST2SMS_SMS`, one active; the switch is a single transaction and codes already issued stay valid. Signup identifier follows the active provider (mobile number for SMS). Codes are hashed at rest and never logged. |
+| Account lifecycle | `modules/account/` | Deletion (password re-auth, sessions revoked, recovery window), recovery by e-mail + password + OTP, admin queue (masked), and the `account-deletion-finalize` job (anonymise + remove photos). |
+| Moderation | `modules/moderation/` | Admin suspend / ban / unban with mandatory reason, audit and session revocation; lifting only reinstates an account that is actually SUSPENDED. B6's automatic suspension at five distinct reporters is preserved. |
+| Staff | `modules/staff/` | Staff and role management, temporary passwords with a forced change (`mustChangePassword` gate in `requirePermission`), `admin:create-super` bootstrap. |
+| Notifications | `modules/notifications/providers/` | Real SMTP, WhatsApp Cloud API and FCM adapters. A missing configuration or vendor error is recorded as a failure — never a fake "sent". In-app notifications are always created. |
+| Storage | `modules/storage/` | `s3.provider.ts` (own SigV4, `lib/sigv4.ts`), private objects, signed URLs, magic-byte image inspection (`image-inspect.ts`), key allow-list (no path traversal), delete. Health reports configuration only. |
+| Rate limiting & security | `middleware/rate-limit-policy.ts`, `lib/rate-limit-store.ts`, `lib/client-ip.ts`, `next.config.js`, `src/middleware.ts` | Shared Postgres counters keyed per route group and client (honours `TRUST_PROXY_HOPS`), CORS allow-list incl. `X-Device-Id`, security headers, production CSP. |
+| Jobs | `src/server/jobs/`, `scripts/run-job.ts`, `/api/v1/internal/jobs/{job}` | Six idempotent jobs guarded by advisory locks, recorded in `job_runs` and the audit log. CLI or Bearer-`CRON_SECRET` HTTP. |
+| Backup | `scripts/backup-secure.sh`, `backup-offsite.ts`, `verify-restore.sh` | Encrypted dumps (passphrase from the environment), off-box copy to a directory or S3-compatible bucket, retention guidance, restore verification into a scratch database. |
+
+### 62.2 Behaviours worth knowing
+
+* The browser proxy clears the session cookie on **any** 401 from an authenticated call. Therefore "wrong current password" (member and admin) answers **403** and "forged payment signature" answers **400** — a 401 would sign a valid user out.
+* `checkout()` creates PENDING rows before asking the gateway for an order. If the gateway cannot create one, those rows are closed (payment FAILED, membership CANCELLED) and the original error is returned, so the member is not locked out of retrying.
+* The B8 duplicate-checkout guard (15 min per plan) still applies; Razorpay members re-enter an unpaid order through the resume endpoint, PhonePe members currently wait (limitation P2-9).
+* Production ignores `RAZORPAY_API_BASE`, `PHONEPE_*_BASE`, `FAST2SMS_API_BASE` and `PAYMENT_PROVIDER_MODE`, so configuration can never point production at a look-alike host or enable a mock gateway.
+* Nothing here has been run against a real vendor. See the Release Readiness Matrix for per-capability status.

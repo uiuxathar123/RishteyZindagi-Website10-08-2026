@@ -28,6 +28,8 @@ export function requireAdminRole(ctx: AuthContext, allowed: string[]): void {
 
 export async function requirePermission(ctx: AuthContext, permissionKey: string): Promise<void> {
   if (ctx.subject.type !== "admin" || !ctx.adminRoleName) throw new AuthorizationError();
+  // PCP: a staff account on a one-time temporary password must set its own password first.
+  if (ctx.mustChangePassword) throw new AuthorizationError("You must change your temporary password before using the admin panel.");
 
   const [role] = await db
     .select()

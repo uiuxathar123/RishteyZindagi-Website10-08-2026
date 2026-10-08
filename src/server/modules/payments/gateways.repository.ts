@@ -24,6 +24,10 @@ export interface GatewayConfig {
     apiSecret?: string;
     merchantId?: string;
     webhookSecret?: string;
+    // PCP additions (PhonePe): OAuth client version and the webhook basic-auth pair.
+    clientVersion?: string;
+    webhookUsername?: string;
+    webhookPassword?: string;
   };
 }
 

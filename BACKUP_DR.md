@@ -1,3 +1,76 @@
+# Production-completion addendum — encrypted, off-box, verified backups (READ THIS FIRST)
+
+Everything below the horizontal rule (the original B14 text) is still accurate for `scripts/backup-db.sh` / `scripts/restore-db.sh`, which are unchanged. The production-completion phase adds three new scripts and the operating policy that goes with them. Where this addendum and the B14 text differ — especially about storage and "no off-box copy" — **this addendum wins**.
+
+**Status labels:** VERIFIED = run by an executed test (`tests/pcp-backup.test.ts`, 12 tests) against a real PostgreSQL 16, real `gpg` and a moto S3 emulator. NOT VERIFIED / REQUIRES EXTERNAL CREDENTIALS = never run against a real remote bucket or a real second machine. **Off-box protection is NOT OPERATIONAL until you configure a destination and run the checklist in §6; the scripts say so explicitly ("OFFSITE: NOT CONFIGURED") instead of letting a local-only run look protected.**
+
+## A. What was added
+
+| Script | Purpose |
+|---|---|
+| `scripts/backup-secure.sh` | `pg_dump` → **encrypt (gpg AES-256, or a gpg public key)** → sha256 sidecar → optional off-box copy → `backups` bookkeeping row → local retention. Refuses to write an unencrypted backup unless `BACKUP_ALLOW_UNENCRYPTED=true`. |
+| `scripts/backup-offsite.ts` | Off-box transport to an S3-compatible bucket (`check`, `put <file>`, `get <name> <dest>`); verifies each upload by HEAD size. |
+| `scripts/verify-restore.sh` | Proves a backup is restorable: checksum → decrypt → `pg_restore --list` → restore into a throwaway `rz_verify_*` database → sanity checks (≥ 50 tables, core tables present) → drop it. |
+
+## B. Settings (environment only; never printed, never written to any artifact)
+
+`DATABASE_URL`, `BACKUP_DIR`, `BACKUP_ENCRYPTION` (`passphrase` default | `recipient` | `none`), `BACKUP_PASSPHRASE_FILE` (a file, mode 600/400, ≥ 16 characters), `BACKUP_GPG_RECIPIENT`, `BACKUP_ALLOW_UNENCRYPTED`, `BACKUP_OFFSITE` (`none` | `dir` | `s3`), `BACKUP_OFFSITE_DIR`, `BACKUP_S3_BUCKET`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_PREFIX`, `BACKUP_S3_FORCE_PATH_STYLE`, `VERIFY_ADMIN_DATABASE_URL`, `VERIFY_MIN_TABLES`, `VERIFY_REQUIRED_TABLES`. Template: `.env.example`.
+
+Exit codes of `backup-secure.sh`: `0` ok · `1` backup/encryption failed · `2` **local backup OK but off-box copy FAILED** (the encrypted local file is kept; do not treat the run as protected) · `3` configuration error.
+
+## C. Setting it up
+
+```
+# one-time: a long random passphrase kept OUTSIDE the server's backup directory
+umask 077; openssl rand -base64 32 > /etc/rishteyzindagi/backup.pass     # chmod 600
+# daily cron (example)
+17 3 * * *  cd /srv/rishteyzindagi && BACKUP_DIR=/var/backups/rz BACKUP_PASSPHRASE_FILE=/etc/rishteyzindagi/backup.pass \
+            BACKUP_OFFSITE=s3 BACKUP_S3_BUCKET=… BACKUP_S3_REGION=… BACKUP_S3_ACCESS_KEY_ID=… BACKUP_S3_SECRET_ACCESS_KEY=… \
+            scripts/backup-secure.sh "$DATABASE_URL" >> /var/log/rz-backup.log 2>&1
+```
+
+Use a **separate bucket, separate credentials and ideally another account/region** for backups; enable bucket versioning and, if available, object lock. Give the backup credentials write-only access to the prefix where possible. Alert on a non-zero exit code (especially `2`).
+
+## D. Retention guidance
+
+- **Local** (enforced by the script, applies to `*.dump.gpg` only): the newest 7 backups plus up to 4 Sunday backups.
+- **Off-box** (not enforced by the scripts — configure it at the bucket, e.g. an S3 lifecycle rule): suggested starting point is daily backups kept 35 days and one backup per month kept 12 months. This is a guideline, not an SLA; adjust to your legal and business needs (a backup contains personal data, so its retention is also a privacy decision — account-deletion finalisation does **not** remove a person from old backups; document your retention period in your privacy policy).
+- Back up the **media bucket** separately from the database: enable bucket versioning on the media bucket (or replicate it). The database dump does not contain photo files.
+
+## E. Keys you must keep (or the backup is useless)
+
+1. **The backup passphrase (or gpg private key)** — store it in a password manager / secrets vault **separately from the backups**. Lose it and every encrypted backup is unrecoverable; leak it and every backup is readable.
+2. **`PAYMENT_CREDENTIALS_ENCRYPTION_KEY`** — payment credentials saved in the admin panel are stored encrypted *inside the database*, so they are inside every dump but unreadable without this key. After restoring to a new environment, set the same key (or re-enter the gateway credentials).
+3. `AUTH_SECRET` is not needed to restore (sessions are simply re-created), but keep it in the same vault.
+
+## F. Restore verification (do this before launch and then on a schedule)
+
+```
+VERIFY_ADMIN_DATABASE_URL=postgres://<role-with-CREATEDB>@host/postgres \
+BACKUP_PASSPHRASE_FILE=/etc/rishteyzindagi/backup.pass \
+scripts/verify-restore.sh /var/backups/rz/rishteyzindagi_….dump.gpg
+```
+
+Expected output: `verify-restore.sh: VERIFIED — <n> tables restored; required tables present; users rows: <n>` followed by `scratch database dropped`; exit code 0. A backup that has never been through this is an *unverified* backup. Run it after the first backup, after every migration that changes tables, and at least monthly; also rehearse a full restore (`scripts/restore-db.sh`) into a staging database once before launch and record the elapsed time as your real recovery-time figure.
+
+To restore from off-box: `npx tsx scripts/backup-offsite.ts get <object-name> ./restore/` (the object name is the file name; list objects with your provider console), then verify and restore as above.
+
+## G. What is VERIFIED and what is not
+
+| Claim | Status |
+|---|---|
+| Encrypted backup is created, plaintext dump is deleted, checksum sidecar written | VERIFIED (real `pg_dump` + `gpg`) |
+| Refuses weak/unreadable passphrase files and unencrypted output without the explicit flag | VERIFIED |
+| Backup restores into a scratch DB and passes sanity checks; a modified file (checksum mismatch), a wrong passphrase and a non-archive file all FAIL verification and leave no scratch database behind | VERIFIED |
+| Off-box copy to a directory and to an S3-compatible endpoint (moto) incl. HEAD size check; failure of the destination returns exit 2 and keeps the local file | VERIFIED against the emulator |
+| No secret (passphrase, S3 keys, DB password) appears in script output | VERIFIED (output scanned in tests) |
+| Off-box copy to a real remote bucket / second machine | **NOT VERIFIED — REQUIRES EXTERNAL CREDENTIALS** |
+| A real scheduler is running the backups | **NOT VERIFIED — nothing in this repo runs it; you must install the cron/scheduler entry** |
+| Recovery time on production-sized data | **NOT VERIFIED** (no production data exists) |
+| Media bucket backup/versioning | **NOT VERIFIED — provider setting, outside this repo** |
+
+---
+
 # RishteyZindagi Backend — Backup & Disaster Recovery (B14)
 
 **Phase:** B14 — Production Release / Deployment / Backup / DR

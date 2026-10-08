@@ -1,3 +1,5 @@
+> **SUPERSEDED for production by `DEPLOYMENT_PRODUCTION.md` (Production Completion Phase).** This file is the earlier B-phase guide and still says that no real payment, OTP or cloud-storage provider exists — that is no longer true. Use `DEPLOYMENT_PRODUCTION.md` and `PRODUCTION_ENV_REFERENCE.md`; keep this file only for the generic reverse-proxy and rollback notes.
+
 # RishteyZindagi Backend — Deployment Guide (B14)
 
 **Phase:** B14 — Production Release / Deployment / Backup / DR

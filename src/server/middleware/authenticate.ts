@@ -25,6 +25,9 @@ export interface AuthContext {
    * "SUPER_ADMIN" / "STAFF_ADMIN"), used by the RBAC middleware. */
   adminRoleName?: string;
   sessionId: string;
+  /** PCP: true for a staff account still using a one-time temporary password.
+   * requirePermission() refuses every permissioned action until it is changed. */
+  mustChangePassword?: boolean;
 }
 
 function extractBearerToken(req: Request): string | null {
@@ -77,6 +80,7 @@ export async function authenticate(req: Request): Promise<AuthContext> {
       subject: { id: row.admin.id, type: "admin" },
       adminRoleName: row.roleName,
       sessionId: session.id,
+      ...(row.admin.mustChangePassword ? { mustChangePassword: true } : {}),
     };
   }
 

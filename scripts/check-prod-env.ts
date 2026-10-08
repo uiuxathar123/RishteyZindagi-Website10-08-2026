@@ -22,6 +22,7 @@
 import "dotenv/config";
 import { getEnv } from "../src/server/config/env";
 import { checkProductionReadiness } from "../src/server/config/prod-readiness";
+import { checkPcpProductionReadiness } from "../src/server/config/prod-readiness-pcp";
 
 function main() {
   let env;
@@ -34,7 +35,9 @@ function main() {
     return;
   }
 
-  const result = checkProductionReadiness(env, process.env.ALLOWED_ORIGINS);
+  const base = checkProductionReadiness(env, process.env.ALLOWED_ORIGINS);
+  const extra = checkPcpProductionReadiness(env);
+  const result = { errors: [...base.errors, ...extra.errors], warnings: [...base.warnings, ...extra.warnings], ok: base.ok && extra.errors.length === 0 };
 
   console.log("=== B16 production-readiness check ===\n");
 

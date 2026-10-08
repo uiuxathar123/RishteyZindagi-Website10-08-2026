@@ -196,6 +196,9 @@ export const otpPurposeEnum = pgEnum("otp_purpose", [
   "LOGIN",
   "FORGOT_PASSWORD",
   "NEW_DEVICE",
+  // PCP (production completion phase): purpose-isolated OTP for recovering an
+  // account that is in its deletion grace window. Additive enum value.
+  "ACCOUNT_RECOVERY",
 ]);
 
 // B3: backend-authoritative profile readiness state. INCOMPLETE = one or
@@ -673,6 +676,10 @@ export const adminUsers = pgTable(
       .notNull()
       .references(() => adminRoles.id),
     status: accountStatusEnum("status").notNull().default("ACTIVE"),
+    // PCP: true for a staff account created with a one-time temporary
+    // password (staff management); cleared when the staff member sets their
+    // own password. Additive column, default false = no change for existing rows.
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1514,5 +1521,124 @@ export const devicePushTokens = pgTable(
   },
   (t) => ({
     userIdx: index("device_push_tokens_user_idx").on(t.userId),
+  })
+);
+
+
+// ---------------------------------------------------------------------------
+// PCP — Production Completion Phase (all tables below are additive)
+// ---------------------------------------------------------------------------
+
+/**
+ * Idempotency ledger for inbound payment-gateway webhooks. (provider, event_id)
+ * is UNIQUE, so a redelivered webhook is detected by the insert itself — no
+ * check-then-act race. The payload is never stored (only its type and a hash
+ * in `payload_hash`), so no card/PII data lands here.
+ */
+export const paymentWebhookEvents = pgTable(
+  "payment_webhook_events",
+  {
+    id: id(),
+    provider: text("provider").notNull(), // "RAZORPAY" | "PHONEPE"
+    eventId: text("event_id").notNull(),
+    eventType: text("event_type"),
+    payloadHash: text("payload_hash"),
+    // RECEIVED -> PROCESSED | IGNORED | FAILED
+    status: text("status").notNull().default("RECEIVED"),
+    paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+    error: text("error"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    providerEventIdx: uniqueIndex("payment_webhook_events_provider_event_idx").on(t.provider, t.eventId),
+    receivedIdx: index("payment_webhook_events_received_idx").on(t.receivedAt),
+  })
+);
+
+/** Refunds issued against a SUCCESS payment (admin-initiated, `payments.review`). */
+export const paymentRefunds = pgTable(
+  "payment_refunds",
+  {
+    id: id(),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id),
+    provider: text("provider").notNull(),
+    providerRefundId: text("provider_refund_id"),
+    // Internal, unique id sent to the gateway (idempotency / receipt).
+    refundRef: text("refund_ref").notNull(),
+    amountInPaise: integer("amount_in_paise").notNull(),
+    currency: text("currency").notNull().default("INR"),
+    // PENDING -> PROCESSED | FAILED
+    status: text("status").notNull().default("PENDING"),
+    reason: text("reason").notNull(),
+    failureReason: text("failure_reason"),
+    requestedByAdminId: uuid("requested_by_admin_id").references(() => adminUsers.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    paymentIdx: index("payment_refunds_payment_idx").on(t.paymentId),
+    refundRefIdx: uniqueIndex("payment_refunds_ref_idx").on(t.refundRef),
+  })
+);
+
+/** Admin bans (account_status = BLOCKED). Mirrors account_suspensions: at most one active ban per user. */
+export const accountBans = pgTable(
+  "account_bans",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bannedAt: timestamp("banned_at", { withTimezone: true }).notNull().defaultNow(),
+    reason: text("reason").notNull(),
+    bannedByAdminId: uuid("banned_by_admin_id").references(() => adminUsers.id),
+    liftedAt: timestamp("lifted_at", { withTimezone: true }),
+    liftedByAdminId: uuid("lifted_by_admin_id").references(() => adminUsers.id),
+    liftReason: text("lift_reason"),
+  },
+  (t) => ({
+    userIdx: index("account_bans_user_idx").on(t.userId),
+    activeBanIdx: uniqueIndex("account_bans_active_user_idx")
+      .on(t.userId)
+      .where(sql`${t.liftedAt} IS NULL`),
+  })
+);
+
+/** Run history for the cron-compatible background jobs (see src/server/jobs). */
+export const jobRuns = pgTable(
+  "job_runs",
+  {
+    id: id(),
+    jobName: text("job_name").notNull(),
+    // RUNNING -> SUCCEEDED | FAILED | SKIPPED_LOCKED
+    status: text("status").notNull().default("RUNNING"),
+    trigger: text("trigger").notNull().default("HTTP"), // HTTP | CLI
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    stats: jsonb("stats"),
+    error: text("error"),
+  },
+  (t) => ({
+    nameStartedIdx: index("job_runs_name_started_idx").on(t.jobName, t.startedAt),
+  })
+);
+
+/**
+ * Shared-store rate-limit counters (fixed window). One row per key; the
+ * window roll-over and the increment happen in ONE atomic upsert so every
+ * app instance sharing this database enforces the same limit.
+ */
+export const rateLimitCounters = pgTable(
+  "rate_limit_counters",
+  {
+    key: text("key").primaryKey(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(1),
+  },
+  (t) => ({
+    windowIdx: index("rate_limit_counters_window_idx").on(t.windowStart),
   })
 );

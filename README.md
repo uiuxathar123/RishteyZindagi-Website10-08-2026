@@ -2,7 +2,7 @@
 
 Premium Indian + NRI matrimonial platform — **one Next.js 14 (App Router) + TypeScript + Tailwind project** containing the public website, the member dashboard, the admin panel and the complete REST backend (PostgreSQL 16 + Drizzle ORM).
 
-**Status:** backend phases B1–B15 frozen; **B16 (final full-stack integration + handover)** connects every member and admin screen to the real backend. See `B16_FINAL_REPORT.md` for the evidence and `FINAL_HANDOVER.md` for the complete handover.
+**Status:** backend phases B1–B15 and B16a/b frozen; the **Production Completion Phase (PCP)** added real Razorpay/PhonePe payments, Email/Fast2SMS OTP, account deletion + recovery, moderation, staff management, S3 storage, shared rate limiting, scheduled jobs and encrypted backups. Everything is verified against local mocks; **no real third-party vendor has been called** (REQUIRES EXTERNAL CREDENTIALS). See `PCP_FINAL_REPORT.md`, `PCP_RELEASE_READINESS_MATRIX.md` and `FINAL_HANDOVER.md`.
 
 ## Start here
 
@@ -10,11 +10,15 @@ Premium Indian + NRI matrimonial platform — **one Next.js 14 (App Router) + Ty
 |---|---|
 | Run it on my machine | **`LOCAL_SETUP.md`** |
 | Understand everything / hand it over | `FINAL_HANDOVER.md` |
-| See what was verified and what is not live | `B16_RELEASE_READINESS.md`, `B16_FINAL_REPORT.md` |
+| See what was verified and what is not live | `PCP_RELEASE_READINESS_MATRIX.md`, `PCP_FINAL_REPORT.md`, `PCP_KNOWN_LIMITATIONS.md` |
+| Audit before/after | `PRODUCTION_COMPLETION_AUDIT.md` |
 | Know how every screen maps to an API | `B16_AUDIT.md` |
 | Call the API | `API_REFERENCE.md` (the HTTP methods in the route files are the authority; see its B16 addendum) |
 | Backend design, per phase | `BACKEND.md`, `docs/phase-status/` |
-| Deploy / back up | `DEPLOYMENT.md`, `BACKUP_DR.md`, `B16_PRODUCTION_INFRASTRUCTURE.md` |
+| Deploy | **`DEPLOYMENT_PRODUCTION.md`**, `PRODUCTION_ENV_REFERENCE.md` |
+| Payments / OTP setup | `PAYMENT_SETUP.md`, `FAST2SMS_SETUP.md` |
+| Back up / restore | `BACKUP_DR.md` (addendum first) |
+| Older deployment notes (B-phase) | `DEPLOYMENT.md`, `B16_PRODUCTION_INFRASTRUCTURE.md` |
 
 ## Quick start
 
@@ -49,11 +53,14 @@ Next.js 14.2 · React 18 · TypeScript 5 · Tailwind CSS · PostgreSQL 16 · Dri
 | Command | Purpose |
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js |
-| `npm run db:migrate` / `db:seed` | Migrations (11) / reference data |
-| `npm test` | Vitest, ~8–12 min, needs the migrated + seeded **test** DB |
+| `npm run db:migrate` / `db:seed` | Migrations (12 → 57 tables) / reference data |
+| `npm run admin:create-super -- --email … --name …` | First Super Admin |
+| `npm run job -- <name>` | Scheduled jobs (`--list` shows them) |
+| `npm run smoke:prod` / `smoke:gateway` | Real-HTTP smoke tests against a production build |
+| `npm test` | Vitest, 66 files, ~15–20 min on 2 cores, needs the migrated + seeded **test** DB |
 | `npx tsc --noEmit` | Type-check |
 | `npm run check:prod-env` | Production-readiness check of your env |
 
-## Not live (by design — nothing is faked)
+## Not verified live (nothing is faked)
 
-OTP delivery vendors, payment gateway SDKs, push vendor, cloud storage, WebSocket chat (the chat screen polls), and staff-management APIs do not exist yet. Each one fails honestly or is labelled "not available yet" in the UI; see `FINAL_HANDOVER.md` §21–§25 for what is required to enable each.
+Razorpay, PhonePe, Fast2SMS, SMTP, WhatsApp Cloud API, FCM, S3-compatible storage and off-box backup are implemented and tested against protocol mocks only. They work the moment you supply real credentials and complete the go-live checklists in `PAYMENT_SETUP.md`, `FAST2SMS_SETUP.md` and `DEPLOYMENT_PRODUCTION.md`; until then they fail closed with an honest message. WebSocket chat does not exist (the chat screen polls). Auto-renewal cannot charge a card unattended. Full list: `PCP_KNOWN_LIMITATIONS.md`.

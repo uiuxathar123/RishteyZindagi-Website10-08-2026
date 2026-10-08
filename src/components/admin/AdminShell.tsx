@@ -4,6 +4,7 @@ import { Logo } from "@/components/layout/Header";
 import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
+import { ForcePasswordChange } from "./ForcePasswordChange";
 import { useAdminSession } from "./AdminSessionProvider";
 import {
   LayoutDashboard,
@@ -19,6 +20,7 @@ import {
   SlidersHorizontal,
   IndianRupee,
   ScrollText,
+  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -37,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users, needs: ["users.view"] },
   { href: "/admin/profiles", label: "Profile Approvals", icon: UserCheck, needs: ["users.view", "profiles.verify"] },
   { href: "/admin/reports", label: "Reports", icon: Flag, needs: ["reports.resolve"] },
+  { href: "/admin/account-deletions", label: "Account Deletions", icon: UserX, needs: ["users.view"] },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
@@ -142,6 +145,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
+
+  // A temporary password (new account / admin reset) must be replaced before anything else is shown.
+  if (admin.mustChangePassword) return <ForcePasswordChange name={admin.name} onLogout={() => void logout()} />;
 
   return (
     <div className="flex min-h-screen bg-rz-cream">

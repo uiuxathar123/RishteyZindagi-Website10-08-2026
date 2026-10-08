@@ -693,3 +693,39 @@ Unchanged and verified: `PATCH /profiles/me`, `PATCH /profiles/me/partner-prefer
 The website does not call `/api/v1` from the browser. It calls the same-origin proxy `/bff/<path>` (= `/api/v1/<path>`), `/bff/admin/<path>` (= `/api/v1/admin/<path>`, admin cookie only) or `/bff/as-admin/<path>` (non-admin endpoints with the admin session). The proxy: moves `sessionToken` out of JSON responses into an **httpOnly** cookie (`rz_session` SameSite=Lax for members, `rz_admin_session` SameSite=Strict for admins), attaches `Authorization: Bearer` server-side, rejects cross-origin state-changing requests (403), clears the cookie on logout or a 401, forwards the real client IP/user-agent for rate limiting and device logic, and streams binary files (photos, invoice PDFs). Native/mobile clients keep using `/api/v1` with a Bearer token exactly as documented above.
 
 Development-only helpers: `GET /bff/dev/status` answers `{ available: false }` and `GET /bff/dev/otp-code` answers 404 unless `NODE_ENV` is not `production` **and** `otp_configs.dev_mode` is on.
+
+---
+
+## 20. Production Completion Phase (PCP) addendum — 24 new routes (120 in total)
+
+All envelopes are `{ success, data, message }` / `{ success:false, error:{ code, message } }`. Authority for methods and bodies is the route file and its zod schema. Errors worth knowing: a wrong *current/confirmation password* is **403** (not 401, because the browser proxy ends the session on any 401); a forged payment signature is **400**; rate-limited answers carry `Retry-After`.
+
+### 20.1 Member / public
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `POST /users/me/delete-account` | member | Start deletion. Requires the current password; account becomes `DELETED_PENDING`, all sessions and push tokens revoked, recovery window `ACCOUNT_RECOVERY_WINDOW_DAYS` (default 30). Wrong password → 403. |
+| `POST /auth/recover-account/request` | public, rate-limited | Body `{ email, password }` (strict). Sends an `ACCOUNT_RECOVERY` OTP to the account's own contact. The answer is identical for unknown / wrong-password / expired accounts (no enumeration). |
+| `POST /auth/recover-account/confirm` | public, rate-limited | Body `{ email, code }` (strict). Restores the account inside the window; refused afterwards. Admins can see pending deletions but cannot restore on the owner's behalf. |
+| `POST /payments/{paymentId}/razorpay/confirm` | member (owner) | Body `{ razorpay_payment_id, razorpay_order_id, razorpay_signature }`. Verifies HMAC with the server-held secret, then re-verifies with Razorpay server-to-server; only then activates. Bad signature → 400. |
+| `POST /payments/{paymentId}/razorpay/resume` | member (owner) | Re-opens an unpaid Razorpay order (same order id; public values only). 409 if no longer pending / expired / not Razorpay; 503 if not configured. |
+| `POST /webhooks/razorpay` | gateway (HMAC `X-Razorpay-Signature` over the raw body) | Idempotent by `X-Razorpay-Event-Id`. 503 until a webhook secret exists; invalid signature → 401. |
+| `POST /webhooks/phonepe` | gateway (`Authorization: SHA256(username:password)`) | Idempotent by body hash; state is re-read from PhonePe before acting. |
+| `POST\|GET /internal/jobs/{job}` | `Authorization: Bearer CRON_SECRET` | Runs one scheduled job. Anything else answers 404 (the endpoint does not reveal itself). Jobs: `membership-expiry`, `membership-reminders`, `membership-renewal-failed`, `payment-reconcile`, `account-deletion-finalize`, `housekeeping`. |
+
+`POST /memberships/checkout` now returns `gatewayCheckout` (public values only: Razorpay `{provider,keyId,orderId,amount,currency}` or PhonePe `{provider,redirectUrl}`) for real gateways. If the gateway cannot create an order the pending rows are closed and the original error (e.g. 503) is returned.
+
+### 20.2 Admin (Bearer admin session; permission shown)
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `GET\|PATCH /admin/payments/config` | `platform.settings.manage` | View status of Razorpay/PhonePe (never secret values: `configured`, `credentialSource` none/environment/admin, `mode`, names of stored fields, webhook URL) / choose the **one** active gateway. |
+| `PUT /admin/payments/config/{gateway}/credentials` | `platform.settings.manage` | Save credentials (encrypted AES-256-GCM with `PAYMENT_CREDENTIALS_ENCRYPTION_KEY`). `gateway` = `razorpay` \| `phonepe`. Audited without values. |
+| `POST /admin/payments/config/{gateway}/test-connection` | `platform.settings.manage` | Real authenticated call to the vendor; reports reachable/rejected. |
+| `GET\|POST /admin/payments/{paymentId}/refunds` | `payments.review` | List / create a refund (amount capped at the unrefunded balance; server decides, not the client). |
+| `GET\|PATCH /admin/otp/provider` | `platform.settings.manage` | Choose exactly one of `EMAIL` \| `FAST2SMS_SMS`; atomic; codes already issued stay valid. |
+| `GET /admin/account-deletions` | `users.view` | Deletion queue (e-mail masked). |
+| `POST /admin/users/{id}/suspend`, `/ban`, `/unban`; `GET …/moderation` (the earlier `lift-suspension` route is unchanged) | `users.suspend` / `users.ban` / `users.view` | Suspend, ban, unban, lift. **Reason required.** Audited; sessions revoked. Automatic suspension at five distinct reporters is unchanged. |
+| `GET\|POST /admin/staff`, `PATCH /admin/staff/{id}`, `POST /admin/staff/{id}/reset-password` | `staff.manage` | List / create (one-time temporary password), change role/status, reset password. `SUPER_ADMIN` accounts cannot be created, edited, demoted or disabled through the API; you cannot change your own role or disable yourself; a non-Super actor may only manage roles whose permissions are a subset of their own. |
+| `GET\|POST /admin/roles`, `PUT /admin/roles/{id}/permissions` | `staff.manage` | List/create roles (Super Admin only; `SUPER_ADMIN` itself is protected); replace a role's permission set (Super Admin only). |
+| `POST /admin/me/password` | any admin | Change own password (`currentPassword`, `newPassword` ≥ 10 chars). Clears the temporary-password gate. Wrong current password → 403. |

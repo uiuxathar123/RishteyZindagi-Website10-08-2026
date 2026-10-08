@@ -85,6 +85,11 @@ export async function fileReport(ctx: AuthContext, input: FileReportInput): Prom
  * second suspension row.
  */
 async function maybeAutoSuspend(reportedUserId: string): Promise<void> {
+  // PCP guard: only an ACTIVE account is auto-suspended. A banned (BLOCKED) or
+  // pending-deletion account must never be moved to SUSPENDED by report volume —
+  // a later "lift" would otherwise silently reactivate it.
+  if ((await repo.findUserAccountStatus(reportedUserId)) !== "ACTIVE") return;
+
   const activeSuspension = await repo.findActiveSuspension(reportedUserId);
   if (activeSuspension) return; // already suspended — nothing to do
 
@@ -254,7 +259,10 @@ export async function liftSuspension(
   }
 
   await repo.liftSuspension(activeSuspension.id, ctx.subject.id);
-  await repo.setUserAccountStatus(userId, "ACTIVE");
+  // PCP guard: only reinstate an account that is actually SUSPENDED (never revive a banned / deleted one).
+  if ((await repo.findUserAccountStatus(userId)) === "SUSPENDED") {
+    await repo.setUserAccountStatus(userId, "ACTIVE");
+  }
 
   await recordAudit({
     actorType: "ADMIN",

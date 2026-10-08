@@ -7,11 +7,14 @@
  *   - log out this device / all devices (POST /auth/logout, /auth/logout-all)
  *   - warnings from the team + acknowledge (GET /warnings/me, POST /warnings/{id}/acknowledge)
  *   - blocked members + unblock (GET /interactions/blocks, DELETE /interactions/blocks/{userId})
- * Privacy / notification preferences, contact changes and account deactivation
+ *   - delete account (POST /users/me/delete-account): password + typed phrase; recoverable until the date the
+ *     server returns, then permanently anonymised
+ * Privacy / notification preferences and contact changes
  * have no backend yet and are listed honestly as "not available" instead of
  * as controls that would do nothing.
  */
 import { FormAlert } from "@/components/auth/FormAlert";
+import { FieldLabel, Input } from "@/components/ui/Input";
 import { ResetPasswordFlow } from "@/components/auth/ResetPasswordFlow";
 import { useSession } from "@/components/session/SessionProvider";
 import { ApiErrorView, ListSkeleton } from "@/components/ui/AsyncView";
@@ -21,7 +24,7 @@ import { api } from "@/lib/api/client";
 import { useAction, useAsync } from "@/lib/api/hooks";
 import type { BlockView, WarningView } from "@/lib/api/types";
 import { formatDate, formatDateTime, humanize } from "@/lib/format";
-import { Ban, Info, KeyRound, LogOut, ShieldAlert, UserRound } from "lucide-react";
+import { Ban, Info, KeyRound, LogOut, ShieldAlert, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
 
@@ -271,6 +274,82 @@ function BlockedSection() {
   );
 }
 
+/* ------------------------------------------------------ delete account */
+
+const DELETE_PHRASE = "DELETE MY ACCOUNT";
+
+interface DeletionResult {
+  status: "DELETED_PENDING";
+  recoverUntil: string;
+  recoveryWindowDays: number;
+}
+
+function DeleteAccountSection() {
+  const { logout } = useSession();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [phrase, setPhrase] = useState("");
+  const [result, setResult] = useState<DeletionResult | null>(null);
+  const del = useAction((body: { password: string; confirmation: string }) => api.post<DeletionResult>("/users/me/delete-account", body));
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await del.run({ password, confirmation: phrase });
+    setPassword("");
+    if (res) setResult(res);
+  }
+
+  if (result) {
+    return (
+      <Section title="Account scheduled for deletion" icon={<Trash2 className="h-5 w-5 text-rz-danger" />}>
+        <FormAlert tone="success">
+          Your account is scheduled for deletion and you have been signed out of every device. You can recover it until{" "}
+          <strong>{formatDate(result.recoverUntil)}</strong> ({result.recoveryWindowDays} days). After that it is permanently anonymised and cannot be restored.
+        </FormAlert>
+        <p className="mt-3 text-sm text-rz-muted">To change your mind, use “Recover your account” on the log-in page.</p>
+        <Button className="mt-4" onClick={() => void logout()}>
+          Continue
+        </Button>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="Delete account" icon={<Trash2 className="h-5 w-5 text-rz-danger" />}>
+      <p className="text-sm text-rz-text">
+        Deleting your account hides your profile, ends your sessions and, after a recovery period, permanently removes your personal details and photos. Payment and invoice records the law requires us to keep are retained without your personal details.
+      </p>
+      {open ? (
+        <form onSubmit={onSubmit} className="mt-4 max-w-md space-y-4 rounded-md border border-rz-danger/30 bg-rz-danger/5 p-4" autoComplete="off">
+          <div>
+            <FieldLabel htmlFor="del-password">Your password</FieldLabel>
+            <Input id="del-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel htmlFor="del-phrase">
+              Type <span className="font-mono">{DELETE_PHRASE}</span> to confirm
+            </FieldLabel>
+            <Input id="del-phrase" value={phrase} onChange={(e) => setPhrase(e.target.value)} spellCheck={false} />
+          </div>
+          {del.error && <FormAlert tone="error">{del.error.friendlyMessage}</FormAlert>}
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" size="sm" disabled={del.pending} onClick={() => { setOpen(false); setPassword(""); setPhrase(""); del.clearError(); }}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" className="!bg-rz-danger hover:!bg-rz-danger/90" disabled={del.pending || !password || phrase !== DELETE_PHRASE}>
+              {del.pending ? "Deleting…" : "Delete my account"}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button variant="outline" size="sm" className="mt-4 border-rz-danger text-rz-danger hover:bg-rz-danger/10" onClick={() => setOpen(true)}>
+          Delete my account…
+        </Button>
+      )}
+    </Section>
+  );
+}
+
 /* ------------------------------------------------------- not available */
 
 function UnavailableSection() {
@@ -278,7 +357,6 @@ function UnavailableSection() {
     ["Privacy controls", "Choosing who can see your profile or photo, and hiding your last-active time."],
     ["Notification preferences", "Turning email, SMS or match-alert notifications on or off."],
     ["Changing email or mobile number", "Updating the contact details on your account."],
-    ["Deactivating or deleting your account", "Hiding or removing your account yourself."],
   ];
   return (
     <section className="rounded-lg border border-dashed border-rz-border bg-rz-cream/50 p-5 md:p-6">
@@ -306,6 +384,7 @@ export function SettingsView() {
       <SessionsSection />
       <WarningsSection />
       <BlockedSection />
+      <DeleteAccountSection />
       <UnavailableSection />
     </div>
   );

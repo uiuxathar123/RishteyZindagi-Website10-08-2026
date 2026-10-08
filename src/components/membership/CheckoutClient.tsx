@@ -23,6 +23,7 @@ import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { featureKeysOf, featureLabel, formatDuration } from "./planUtils";
 import { InvoiceDownloadButton } from "./InvoiceDownloadButton";
+import { openRazorpayCheckout, redirectToGateway } from "@/lib/payments/gateway-handoff";
 
 /**
  * Development-only. `process.env.NODE_ENV` is inlined by Next at build time,
@@ -44,7 +45,7 @@ interface Receipt {
 
 type Phase =
   | { kind: "idle" }
-  | { kind: "working"; step: "order" | "verify" | "receipt" }
+  | { kind: "working"; step: "order" | "pay" | "verify" | "receipt" }
   | { kind: "success"; receipt: Receipt }
   | { kind: "pending"; paymentId: string; simulated: boolean }
   | { kind: "failed"; payment: PaymentView | null; simulated: boolean }
@@ -132,6 +133,51 @@ export function CheckoutClient({ planCode }: { planCode: string }) {
     [settle]
   );
 
+  /** Opens Razorpay Checkout for an order OUR server created and settles through OUR server. */
+  const payViaRazorpay = useCallback(
+    async (paymentId: string, gw: { keyId: string; orderId: string; amount: number; currency: string }) => {
+      if (!plan) return;
+      setPhase({ kind: "working", step: "pay" });
+      const outcome = await openRazorpayCheckout({
+        keyId: gw.keyId,
+        orderId: gw.orderId,
+        amount: gw.amount,
+        currency: gw.currency,
+        planName: plan.name,
+      });
+      if (outcome.kind === "paid") {
+        // Our server checks the signature and the amount; the browser's word is never enough.
+        setPhase({ kind: "working", step: "verify" });
+        const result = await api.post<VerifyPaymentResult>(`/payments/${paymentId}/razorpay/confirm`, outcome.response);
+        await settle(result, false);
+      } else if (outcome.kind === "failed") {
+        setError(null);
+        await verify(paymentId, false);
+      } else {
+        // Closed without paying: the order stays pending until it is paid or expires; "Continue to payment" reopens it.
+        setPhase({ kind: "pending", paymentId, simulated: false });
+      }
+    },
+    [plan, settle, verify]
+  );
+
+  /** Reopen the SAME unpaid Razorpay order (the duplicate-checkout guard blocks a second one for a while). */
+  const resumePayment = useCallback(
+    async (paymentId: string) => {
+      setError(null);
+      setPhase({ kind: "working", step: "order" });
+      try {
+        const res = await api.post<{ paymentId: string; gatewayCheckout: { provider: "RAZORPAY"; keyId: string; orderId: string; amount: number; currency: string } }>(`/payments/${paymentId}/razorpay/resume`);
+        await payViaRazorpay(res.paymentId, res.gatewayCheckout);
+      } catch (e) {
+        if (isApiError(e) && e.kind === "aborted") return;
+        setError(isApiError(e) ? e : null);
+        setPhase({ kind: "pending", paymentId, simulated: false });
+      }
+    },
+    [payViaRazorpay]
+  );
+
   const startPayment = useCallback(
     async (simulate?: SimOutcome) => {
       if (!plan) return;
@@ -141,6 +187,17 @@ export function CheckoutClient({ planCode }: { planCode: string }) {
         const body: { planCode: string; devSimulateOutcome?: SimOutcome } = { planCode: plan.code };
         if (DEV_BUILD && simulate) body.devSimulateOutcome = simulate;
         const order = await api.post<CheckoutResult>("/memberships/checkout", body);
+        const gw = order.gatewayCheckout;
+        if (gw?.provider === "RAZORPAY") {
+          await payViaRazorpay(order.paymentId, gw);
+          return;
+        }
+        if (gw?.provider === "PHONEPE") {
+          setPhase({ kind: "working", step: "pay" });
+          if (redirectToGateway(gw.redirectUrl)) return; // the member returns via /membership/payment-return
+          setPhase({ kind: "pending", paymentId: order.paymentId, simulated: false });
+          return;
+        }
         await verify(order.paymentId, Boolean(DEV_BUILD && simulate));
       } catch (e) {
         if (isApiError(e) && e.kind === "aborted") return;
@@ -148,7 +205,7 @@ export function CheckoutClient({ planCode }: { planCode: string }) {
         setPhase({ kind: "idle" });
       }
     },
-    [plan, verify]
+    [plan, verify, payViaRazorpay]
   );
 
   /** 409 "already pending": find the newest PENDING payment and re-verify it. */
@@ -241,7 +298,12 @@ export function CheckoutClient({ planCode }: { planCode: string }) {
         {phase.simulated && <SimulatedTag />}
         {error && <InlineError error={error} />}
         <div className="mt-5 flex flex-wrap justify-center gap-3">
-          <Button onClick={() => verify(phase.paymentId, phase.simulated)}>
+          {!phase.simulated && (
+            <Button onClick={() => resumePayment(phase.paymentId)}>
+              Continue to payment
+            </Button>
+          )}
+          <Button variant={phase.simulated ? "primary" : "outline"} onClick={() => verify(phase.paymentId, phase.simulated)}>
             Check status again
           </Button>
           <ButtonLink href="/dashboard/membership" variant="outline">
@@ -258,7 +320,9 @@ export function CheckoutClient({ planCode }: { planCode: string }) {
     phase.kind === "working"
       ? phase.step === "order"
         ? "Creating your order…"
-        : phase.step === "verify"
+        : phase.step === "pay"
+          ? "Waiting for the payment gateway…"
+          : phase.step === "verify"
           ? "Verifying payment with the server…"
           : "Loading your verified receipt…"
       : "";

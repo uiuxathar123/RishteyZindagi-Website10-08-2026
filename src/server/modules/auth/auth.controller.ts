@@ -9,11 +9,18 @@ import type { RequestMeta } from "./auth.service";
 import * as otpService from "@/server/modules/otp/otp.service";
 import { record } from "@/server/modules/audit/audit.service";
 
+/** PCP security review: the client-supplied device id is stored and audited, so only a short,
+ * boring token is accepted (anything else is treated as "no device id"). */
+const DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+export function sanitizeDeviceId(value: string | null): string | null {
+  return value !== null && DEVICE_ID_PATTERN.test(value) ? value : null;
+}
+
 function requestMeta(req: NextRequest): RequestMeta {
   return {
     ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip"),
     userAgent: req.headers.get("user-agent"),
-    deviceId: req.headers.get("x-device-id"),
+    deviceId: sanitizeDeviceId(req.headers.get("x-device-id")),
   };
 }
 

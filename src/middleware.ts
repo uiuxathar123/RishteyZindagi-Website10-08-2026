@@ -42,7 +42,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const ALLOWED_METHODS = "GET,POST,PATCH,DELETE,OPTIONS";
-const ALLOWED_HEADERS = "Content-Type,Authorization";
+// PCP security review: X-Device-Id was missing, so a browser client on an allow-listed
+// origin could not send the device id the new-device verification flow depends on
+// (the preflight rejected it). Added; nothing is relaxed.
+const ALLOWED_HEADERS = "Content-Type,Authorization,X-Device-Id";
 
 /** Non-CORS security headers — unaffected by the origin policy, applied
  * to every API response (kept here, alongside the CORS logic, since this
@@ -98,6 +101,7 @@ function applyCorsHeaders(res: NextResponse, requestOrigin: string | null): void
   // one.
   res.headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
   res.headers.set("Access-Control-Allow-Headers", ALLOWED_HEADERS);
+  res.headers.set("Access-Control-Max-Age", "600");
 }
 
 export function middleware(req: NextRequest): NextResponse {

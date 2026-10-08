@@ -13,6 +13,7 @@ import { AppError, InternalError } from "@/server/lib/errors";
 import { fail } from "@/server/lib/response";
 import { logError, logRequest } from "@/server/lib/logger";
 import type { AuthContext } from "./authenticate";
+import { enforceRateLimitPolicy, PolicyRateLimitError } from "./rate-limit-policy";
 
 export interface RouteContext {
   requestId: string;
@@ -36,6 +37,9 @@ export function withErrorHandling(handler: Handler) {
     const ctx: RouteContext = { requestId, params: nextRouteArgs?.params };
 
     try {
+      // PCP: central, shared-store rate-limit policy (additive hook — a no-op
+      // when the policy is disabled or no rule matches).
+      await enforceRateLimitPolicy(req);
       const res = await handler(req, ctx);
       logRequest({
         requestId,
@@ -64,7 +68,11 @@ export function withErrorHandling(handler: Handler) {
         error: { name: appError.name, message: appError.message, code: appError.code },
       });
 
-      return fail(appError.code, appError.message, appError.statusCode, appError.details);
+      const failure = fail(appError.code, appError.message, appError.statusCode, appError.details);
+      if (appError instanceof PolicyRateLimitError) {
+        failure.headers.set("Retry-After", String(appError.retryAfterSeconds));
+      }
+      return failure;
     }
   };
 }

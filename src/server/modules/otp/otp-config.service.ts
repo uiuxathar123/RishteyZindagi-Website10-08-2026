@@ -82,6 +82,10 @@ export async function updateConfig(
   if (input.devMode === true && getEnv().NODE_ENV === "production") {
     throw new ValidationError("Dev OTP mode cannot be enabled in production.");
   }
+  // PCP: WhatsApp OTP delivery has no real implementation; the supported providers are EMAIL and SMS (Fast2SMS).
+  if (input.activeMethod === "WHATSAPP" && getEnv().NODE_ENV === "production") {
+    throw new ValidationError("WhatsApp OTP delivery is not supported. Use EMAIL or SMS.");
+  }
 
   const before = await otpConfigRepo.get();
   const updated = await otpConfigRepo.update({ ...input, updatedByAdminId: ctx.subject.id });

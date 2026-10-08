@@ -34,12 +34,12 @@ import type { PaymentRow } from "./payments.repository";
 import * as gatewaysRepo from "./gateways.repository";
 import { getActiveGatewayRow } from "./gateways.service";
 import { getPaymentGatewayProvider } from "./providers/factory";
-import type { VerifyOutcomeStatus } from "./providers/types";
+import type { ClientCheckoutData, VerifyOutcomeStatus } from "./providers/types";
 import * as membershipPlansRepo from "@/server/modules/memberships/membership-plans.repository";
 import * as membershipsRepo from "@/server/modules/memberships/memberships.repository";
 import { tierRank } from "@/server/modules/memberships/plan-tiers";
 import { issueInvoice } from "@/server/modules/invoices/invoices.service";
-import { getEnv } from "@/server/config/env";
+import { isPaymentDevMode } from "./dev-mode";
 
 const ADMIN_PERMISSION = "payments.review";
 // B13 (Performance/Scalability phase): same admin-list pagination
@@ -103,6 +103,8 @@ export interface CheckoutResult {
   currency: string;
   gatewayName: string;
   status: "PENDING";
+  /** PCP: public data the browser needs to complete payment at a real gateway (absent for the dev gateway). */
+  gatewayCheckout?: ClientCheckoutData;
 }
 
 export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<CheckoutResult> {
@@ -134,16 +136,38 @@ export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<
   });
 
   const transactionRef = paymentsRepo.generateInternalTransactionRef();
-  await paymentsRepo.createTransaction({ paymentId: payment.id, transactionRef, amountInPaise: plan.priceInPaise });
+  const txRow = await paymentsRepo.createTransaction({ paymentId: payment.id, transactionRef, amountInPaise: plan.priceInPaise });
 
-  const devMode = getEnv().NODE_ENV !== "production";
+  const devMode = isPaymentDevMode();
   const provider = getPaymentGatewayProvider(gatewayRow.name, devMode);
-  const orderResult = await provider.createOrder({
-    amountInSmallestUnit: plan.priceInPaise,
-    currency: plan.currency as "INR" | "USD",
-    receiptRef: transactionRef,
-    simulateOutcome: input.devSimulateOutcome,
-  });
+  let orderResult: Awaited<ReturnType<typeof provider.createOrder>>;
+  try {
+    orderResult = await provider.createOrder({
+      amountInSmallestUnit: plan.priceInPaise,
+      currency: plan.currency as "INR" | "USD",
+      receiptRef: transactionRef,
+      simulateOutcome: input.devSimulateOutcome,
+      paymentId: payment.id,
+    });
+  } catch (err) {
+    // PCP production defect fix (additive error path): if the gateway cannot create an order (credentials missing,
+    // gateway down, rejected request) nothing was ever offered to the customer, so the PENDING rows created above
+    // must not linger — otherwise the duplicate-checkout guard would lock the member out of retrying for 15 minutes.
+    // The payment is closed through the same compare-and-swap used everywhere else, the membership is cancelled, and
+    // the ORIGINAL error (e.g. 503 "not configured") is rethrown unchanged. Cleanup problems never mask it.
+    try {
+      await paymentsRepo.resolveTransactionOutcome(txRow.id, {
+        status: "FAILED",
+        gatewayTransactionId: null,
+        rawResponse: { reason: "order_creation_failed" },
+      });
+      await paymentsRepo.resolvePaymentOutcome(payment.id, { status: "FAILED", verifiedAt: null, verificationMethod: null });
+      await membershipsRepo.cancel(membership.id);
+    } catch {
+      /* best effort — the pending-expiry job reaps anything left behind */
+    }
+    throw err;
+  }
 
   await paymentsRepo.setGatewayReference(payment.id, orderResult.providerOrderId);
 
@@ -156,6 +180,7 @@ export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<
     currency: plan.currency,
     gatewayName: gatewayRow.name,
     status: "PENDING",
+    ...(orderResult.clientCheckout ? { gatewayCheckout: orderResult.clientCheckout } : {}),
   };
 }
 
@@ -270,7 +295,8 @@ async function resolveOrAlreadyResolved(
   return { payment: current, won: false };
 }
 
-async function verifyPaymentInternal(payment: PaymentRow): Promise<VerifyResult> {
+/** PCP: exported so webhook / reconciliation code re-uses the exact same race-safe verify path. */
+export async function verifyPaymentInternal(payment: PaymentRow): Promise<VerifyResult> {
   if (payment.status !== "PENDING") {
     return { payment, status: "ALREADY_RESOLVED" };
   }
@@ -281,7 +307,7 @@ async function verifyPaymentInternal(payment: PaymentRow): Promise<VerifyResult>
   const gatewayRow = await gatewaysRepo.findById(payment.gatewayId);
   if (!gatewayRow) throw new NotFoundError("Payment gateway not found.");
 
-  const devMode = getEnv().NODE_ENV !== "production";
+  const devMode = isPaymentDevMode();
   const provider = getPaymentGatewayProvider(gatewayRow.name, devMode);
   const result = await provider.verifyPayment({ providerOrderId: payment.gatewayReference });
 

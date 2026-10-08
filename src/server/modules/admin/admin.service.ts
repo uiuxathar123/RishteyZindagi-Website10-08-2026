@@ -25,7 +25,7 @@ export interface AdminLoginInput {
 }
 
 export interface AdminLoginResult {
-  admin: { id: string; name: string; email: string; role: string };
+  admin: { id: string; name: string; email: string; role: string; mustChangePassword?: boolean };
   sessionToken: string;
   expiresAt: string;
 }
@@ -73,7 +73,13 @@ export async function adminLogin(input: AdminLoginInput, meta: RequestMeta): Pro
   });
 
   return {
-    admin: { id: row.admin.id, name: row.admin.name, email: row.admin.email, role: row.roleName },
+    admin: {
+      id: row.admin.id,
+      name: row.admin.name,
+      email: row.admin.email,
+      role: row.roleName,
+      ...(row.admin.mustChangePassword ? { mustChangePassword: true } : {}),
+    },
     sessionToken: token,
     expiresAt: expiresAt.toISOString(),
   };
@@ -111,7 +117,7 @@ export async function adminMe(ctx: AuthContext) {
     .where(eq(rolePermissions.roleId, row.role.id));
 
   return {
-    admin: { id: row.admin.id, name: row.admin.name, email: row.admin.email, role: row.role.name },
+    admin: { id: row.admin.id, name: row.admin.name, email: row.admin.email, role: row.role.name, mustChangePassword: row.admin.mustChangePassword },
     permissions: grants.map((g) => g.key).sort(),
   };
 }

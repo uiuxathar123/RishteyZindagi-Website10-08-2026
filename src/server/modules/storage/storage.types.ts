@@ -25,4 +25,8 @@ export interface StorageProvider {
   upload(input: StorageUploadInput): Promise<{ key: string }>;
   read(key: string): Promise<StorageReadResult | null>;
   delete(key: string): Promise<void>;
+  /** PCP (optional): time-limited, signed GET URL for providers whose objects are private. Not offered by the local provider. */
+  getSignedUrl?(key: string, ttlSeconds: number): Promise<string>;
+  /** PCP (optional): verifies the configured bucket / directory is reachable and writable by this app. */
+  healthCheck?(): Promise<{ ok: boolean; message: string }>;
 }
