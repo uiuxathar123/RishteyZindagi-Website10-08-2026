@@ -10,7 +10,7 @@
  * already uses for `createMatch`/`createLike`/`createShortlist`/
  * `createBlock`, not a new pattern.
  */
-import { and, count, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { chats, chatParticipants, messages } from "@/server/db/schema";
 
@@ -186,4 +186,55 @@ export async function countUnreadForUser(userId: string): Promise<number> {
     .from(messages)
     .where(and(inArray(messages.chatId, chatIds), ne(messages.senderUserId, userId), isNull(messages.readAt)));
   return Number(row?.count ?? 0);
+}
+
+// --- B19: live stream cursors ---------------------------------------------------
+
+export async function messageExistsInChat(chatId: string, messageId: string): Promise<boolean> {
+  const [row] = await db.select({ id: messages.id }).from(messages).where(and(eq(messages.chatId, chatId), eq(messages.id, messageId))).limit(1);
+  return !!row;
+}
+
+export async function latestMessageId(chatId: string): Promise<string | null> {
+  const [row] = await db.select({ id: messages.id }).from(messages).where(eq(messages.chatId, chatId)).orderBy(desc(messages.sentAt), desc(messages.id)).limit(1);
+  return row?.id ?? null;
+}
+
+/** Messages strictly after `afterId` in (sent_at, id) order. The comparison runs inside Postgres so the microsecond
+ * part of `sent_at` (which a JS Date cannot hold) can never cause a duplicate or a skipped message. */
+export async function messagesAfterId(chatId: string, afterId: string, limit: number): Promise<MessageRow[]> {
+  const res = await db.execute(sql`
+    SELECT m.* FROM messages m
+    WHERE m.chat_id = ${chatId}
+      AND (m.sent_at, m.id) > (SELECT a.sent_at, a.id FROM messages a WHERE a.id = ${afterId} AND a.chat_id = ${chatId})
+    ORDER BY m.sent_at ASC, m.id ASC
+    LIMIT ${limit}
+  `);
+  return (res.rows as Array<Record<string, unknown>>).map(rowToMessage);
+}
+
+/** For a chat with no messages yet at connect time: everything created at/after the database clock reading taken at connect. */
+export async function messagesSinceDbTime(chatId: string, sinceIso: string, limit: number): Promise<MessageRow[]> {
+  const res = await db.execute(sql`
+    SELECT m.* FROM messages m WHERE m.chat_id = ${chatId} AND m.sent_at >= ${sinceIso}::timestamptz
+    ORDER BY m.sent_at ASC, m.id ASC LIMIT ${limit}
+  `);
+  return (res.rows as Array<Record<string, unknown>>).map(rowToMessage);
+}
+
+export async function dbNowIso(): Promise<string> {
+  const res = await db.execute(sql`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS t`);
+  return String((res.rows[0] as { t: string }).t);
+}
+
+function rowToMessage(r: Record<string, unknown>): MessageRow {
+  const d = (v: unknown) => (v == null ? null : v instanceof Date ? v : new Date(String(v)));
+  return {
+    id: String(r.id),
+    chatId: String(r.chat_id),
+    senderUserId: String(r.sender_user_id),
+    body: String(r.body),
+    sentAt: d(r.sent_at) as Date,
+    readAt: d(r.read_at),
+  };
 }

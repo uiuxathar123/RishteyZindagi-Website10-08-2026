@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import type { ChatSummary, MatchView, MessageView, Page } from "@/lib/api/types";
 
 const POLL_MS = 10_000;
+/** While the live stream is connected the poll only acts as a safety net. */
+const LIVE_POLL_MS = 45_000;
 const THREAD_PAGE_SIZE = 30;
 const MAX_LENGTH = 2000;
 
@@ -130,7 +132,40 @@ function Thread({
   useEffect(() => {
     void fetchLatest();
   }, [fetchLatest]);
-  usePolling(() => void fetchLatest(), POLL_MS);
+  const [live, setLive] = useState(false);
+  // Callbacks go through refs so a re-render of the parent never tears the stream down.
+  const markReadRef = useRef(markRead);
+  markReadRef.current = markRead;
+  const changedRef = useRef(onChatsChanged);
+  changedRef.current = onChatsChanged;
+  usePolling(() => void fetchLatest(), live ? LIVE_POLL_MS : POLL_MS);
+
+  // B19: live delivery over Server-Sent Events (not a WebSocket). Falls back to polling whenever the stream is not open.
+  useEffect(() => {
+    if (!loaded || typeof EventSource === "undefined") return;
+    const es = new EventSource(`/bff/chats/${chat.id}/stream`);
+    es.addEventListener("ready", () => alive.current && setLive(true));
+    es.addEventListener("message", (ev) => {
+      if (!alive.current) return;
+      try {
+        const m = JSON.parse((ev as MessageEvent<string>).data) as MessageView;
+        setMessages((prev) => mergeMessages(prev, [m]));
+        if (!m.mine) void markReadRef.current();
+        changedRef.current();
+      } catch {
+        /* a malformed event is ignored; the poll still catches up */
+      }
+    });
+    // The browser reconnects by itself after a clean close; a hard failure (401/429/network) leaves it CLOSED.
+    es.onerror = () => {
+      if (!alive.current) return;
+      if (es.readyState === EventSource.CLOSED) setLive(false);
+    };
+    return () => {
+      es.close();
+      setLive(false);
+    };
+  }, [loaded, chat.id]);
 
   // Keep the newest message in view unless the person scrolled up to read history.
   useEffect(() => {

@@ -3,7 +3,7 @@
  * authenticate -> rate-limit -> validate -> call service -> ok()/created().
  */
 import { z } from "zod";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { authenticate } from "@/server/middleware/authenticate";
 import { parseJsonBody } from "@/server/lib/validate";
 import { checkRateLimit } from "@/server/middleware/rate-limit";
@@ -11,6 +11,7 @@ import { ValidationError } from "@/server/lib/errors";
 import { ok, created } from "@/server/lib/response";
 import * as chatService from "./chat.service";
 import * as dto from "./chat.dto";
+import { openMessageStream } from "./chat-stream";
 
 const uuidField = z.string().uuid();
 
@@ -93,4 +94,22 @@ export async function markChatReadHandler(req: NextRequest, params: { chatId: st
   const { chatId } = parseParams(chatParamsSchema, params);
   const updated = await chatService.markChatRead(ctx, chatId);
   return ok({ chatId, updated }, "Chat marked as read.");
+}
+
+/** B19: live updates (SSE). Authenticated + participant-checked at connect; see chat-stream.ts. */
+export async function streamMessagesHandler(req: NextRequest, params: { chatId: string }) {
+  const ctx = await authenticate(req);
+  checkRateLimit(`chat-stream:${ctx.subject.id}`, 30, 60_000);
+  const { chatId } = parseParams(chatParamsSchema, params);
+  const lastEventId = req.headers.get("last-event-id") ?? new URL(req.url).searchParams.get("after");
+  const stream = await openMessageStream(ctx, chatId, lastEventId, req.signal);
+  return new NextResponse(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
