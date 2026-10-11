@@ -3,6 +3,7 @@
 import { Crown } from "lucide-react";
 import { NotAvailable, PageHeader } from "./AdminUi";
 import { OtpProviderPanel } from "./OtpProviderPanel";
+import { OtpPolicyPanel } from "./OtpPolicyPanel";
 import { PaymentProviderPanel } from "./PaymentProviderPanel";
 import { MatchingWeightsPanel, OtpConfigPanel } from "./SettingsPanels";
 
@@ -13,9 +14,10 @@ export function PlatformSettingsClient() {
       <PageHeader
         title="Platform Settings"
         icon={<Crown className="h-5 w-5 text-rz-gold-rich" strokeWidth={1.8} />}
-        description="OTP delivery, match scoring and payment gateways for the whole platform — Super Admin only."
+        description="OTP delivery and policy, match scoring and payment gateways for the whole platform — Super Admin only."
       />
       <OtpProviderPanel />
+      <OtpPolicyPanel />
       <OtpConfigPanel />
       <MatchingWeightsPanel />
       <PaymentProviderPanel />

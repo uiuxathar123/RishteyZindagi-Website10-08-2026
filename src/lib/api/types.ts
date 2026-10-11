@@ -53,6 +53,14 @@ export interface OtpChallenge {
   resendAvailableAt: string;
 }
 
+/** B18: POST /auth/register. `otpRequired === false` means the platform skips the contact check: no code was sent and `ticket` can go straight to set-password. */
+export type RegisterResponse = Omit<OtpChallenge, "channel"> & {
+  channel: OtpChallenge["channel"] | "NONE";
+  otpRequired?: boolean;
+  ticket?: string;
+  ticketExpiresAt?: string;
+};
+
 export type LoginResponse =
   | { user: PublicUser; expiresAt: string }
   | ({ deviceVerificationRequired: true } & OtpChallenge);

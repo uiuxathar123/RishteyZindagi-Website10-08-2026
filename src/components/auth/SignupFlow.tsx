@@ -17,7 +17,7 @@ import { LookupSelect } from "@/components/forms/LookupSelect";
 import { api } from "@/lib/api/client";
 import { isApiError } from "@/lib/api/errors";
 import { groupCommunities, useReference } from "@/lib/api/lookups";
-import type { OtpChallenge } from "@/lib/api/types";
+import type { OtpChallenge, RegisterResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { Check, PartyPopper } from "lucide-react";
 import Link from "next/link";
@@ -81,6 +81,8 @@ export function SignupFlow() {
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const [registeredKey, setRegisteredKey] = useState<string>("");
   const [ticket, setTicket] = useState<string | null>(null);
+  // B18: true when the platform skipped the sign-up code (policy OTP_NOT_REQUIRED).
+  const [otpSkipped, setOtpSkipped] = useState(false);
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -119,23 +121,31 @@ export function SignupFlow() {
     const key = JSON.stringify([name, email, mobile, d.countryCode]);
     if (challenge && key === registeredKey) {
       // Same details as the code that was already sent — don't burn another OTP.
-      setStep(1);
+      setStep(ticket ? 2 : 1);
       return;
     }
 
     setPending(true);
     try {
-      const c = await api.post<OtpChallenge>("/auth/register", {
+      const c = await api.post<RegisterResponse>("/auth/register", {
         name,
         email,
         mobileNumber: mobile,
         countryCode: d.countryCode,
       });
-      setChallenge(c);
+      setChallenge({ identifier: c.identifier, channel: c.channel === "NONE" ? "EMAIL" : c.channel, expiresInSeconds: c.expiresInSeconds, resendAvailableAt: c.resendAvailableAt });
       setRegisteredKey(key);
-      setTicket(null);
       setD((prev) => ({ ...prev, name, email, mobileNumber: mobile }));
-      setStep(1);
+      if (c.otpRequired === false && c.ticket) {
+        // The platform does not require a code for sign-up: go straight to choosing a password.
+        setTicket(c.ticket);
+        setOtpSkipped(true);
+        setStep(2);
+      } else {
+        setTicket(null);
+        setOtpSkipped(false);
+        setStep(1);
+      }
     } catch (err) {
       if (isApiError(err)) {
         const map: Errors = {};
@@ -194,8 +204,8 @@ export function SignupFlow() {
         else setFormError(err.friendlyMessage);
       } else if (isApiError(err) && err.kind === "unauthorized") {
         setTicket(null);
-        setFormError("Your verification has expired. Please verify your code again.");
-        setStep(1);
+        setFormError(otpSkipped ? "Your sign-up session has expired. Please submit your details again." : "Your verification has expired. Please verify your code again.");
+        setStep(otpSkipped ? 0 : 1);
       } else if (isApiError(err) && err.kind === "conflict") {
         setFormError(`${err.message} Try logging in instead.`);
       } else {
@@ -234,7 +244,9 @@ export function SignupFlow() {
     <div className="mx-auto w-full max-w-lg">
       {/* Stepper */}
       <ol className="mb-8 flex items-center justify-between" aria-label="Signup progress">
-        {STEPS.map((label, i) => (
+        {STEPS.map((baseLabel, i) => {
+          const label = i === 1 && otpSkipped ? "No code needed" : baseLabel;
+          return (
           <li key={label} className="flex flex-1 items-center last:flex-none" aria-current={i === step ? "step" : undefined}>
             <div className="flex flex-col items-center gap-1.5">
               <span
@@ -255,7 +267,8 @@ export function SignupFlow() {
               <span className={cn("mx-2 h-0.5 flex-1 rounded-full", i < step ? "bg-rz-maroon" : "bg-rz-border")} />
             )}
           </li>
-        ))}
+          );
+        })}
       </ol>
 
       <div className="rounded-xl border border-rz-border bg-white p-6 shadow-card-sm md:p-8">

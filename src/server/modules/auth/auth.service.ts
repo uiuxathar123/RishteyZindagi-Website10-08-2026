@@ -32,6 +32,7 @@ import * as otpService from "@/server/modules/otp/otp.service";
 import { hashPassword, verifyPassword } from "@/server/lib/password";
 import { generateSessionToken, hashSessionToken, sessionExpiryDate } from "@/server/lib/session";
 import { AuthenticationError, AuthorizationError, ConflictError } from "@/server/lib/errors";
+import * as platformSettings from "@/server/modules/platform-settings/platform-settings.service";
 import { record } from "@/server/modules/audit/audit.service";
 import { toPublicUser, type PublicUser } from "@/server/modules/users/users.dto";
 import type { UserRow } from "@/server/modules/users/users.repository";
@@ -84,6 +85,13 @@ export interface RegisterResult {
   channel: string;
   expiresInSeconds: number;
   resendAvailableAt: string;
+  /**
+   * B18: false when the Super Admin has set SIGNUP_VERIFICATION to OTP_NOT_REQUIRED. In that case no code was sent
+   * and `ticket` is a ready-to-use one-time ticket for POST /auth/set-password. Absent/true = the normal flow.
+   */
+  otpRequired?: boolean;
+  ticket?: string;
+  ticketExpiresAt?: string;
 }
 
 export async function register(input: RegisterInput, meta: RequestMeta): Promise<RegisterResult> {
@@ -94,6 +102,27 @@ export async function register(input: RegisterInput, meta: RequestMeta): Promise
   }
   if (clashes.some((u) => u.mobileNumber === input.mobileNumber)) {
     throw new ConflictError("An account with this mobile number already exists.", { field: "mobileNumber" });
+  }
+
+  // B18: policy SIGNUP_VERIFICATION. When the Super Admin has switched the contact check off, no code is sent; the
+  // server issues the one-time ticket itself and the account is created with e-mail/mobile UNVERIFIED.
+  if (!(await platformSettings.isOtpRequired("SIGNUP_VERIFICATION"))) {
+    const identifier = input.email;
+    const { ticket, ticketExpiresAt } = await otpService.issuePolicyTicket({
+      identifier,
+      purpose: "SIGNUP",
+      metadata: { name: input.name, email: input.email, mobileNumber: input.mobileNumber, countryCode },
+      meta,
+    });
+    await record({
+      actorType: "SYSTEM",
+      action: "signup.otp_skipped_by_policy",
+      entityType: "otp",
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      metadata: { identifier, policy: "SIGNUP_VERIFICATION:OTP_NOT_REQUIRED" },
+    });
+    return { identifier, channel: "NONE", expiresInSeconds: 0, resendAvailableAt: new Date().toISOString(), otpRequired: false, ticket, ticketExpiresAt };
   }
 
   const channel = await otpService.getActiveChannel();
@@ -173,6 +202,22 @@ export async function setPassword(input: SetPasswordInput, meta: RequestMeta): P
   }
   const pending = consumed.metadata;
 
+  // A ticket minted while the Super Admin had sign-up verification OFF is only honoured while it is still OFF.
+  // If the switch was turned back ON in the meantime the ticket is spent and the person must register again (this
+  // time with a code) — the setting is enforced on every sign-up request, not only when the ticket was issued.
+  const skippedByPolicy = (consumed.metadata as { otpSkippedByPolicy?: unknown }).otpSkippedByPolicy === true;
+  if (skippedByPolicy && (await platformSettings.isOtpRequired("SIGNUP_VERIFICATION"))) {
+    await record({
+      actorType: "SYSTEM",
+      action: "signup.policy_ticket_rejected",
+      entityType: "otp",
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      metadata: { identifier: input.identifier, reason: "SIGNUP_VERIFICATION is OTP_REQUIRED again" },
+    });
+    throw new AuthenticationError("Sign-up verification is now required. Please start registration again.");
+  }
+
   // Re-check uniqueness — time has passed since register(), so someone
   // else may have taken the email/mobile in the meantime.
   const clashes = await usersRepo.findByEmailOrMobile(pending.email, pending.mobileNumber);
@@ -194,8 +239,9 @@ export async function setPassword(input: SetPasswordInput, meta: RequestMeta): P
     // Whichever contact method actually received and proved the OTP is
     // verified by construction — the other stays unverified until its own
     // verification flow (not built in B2 scope).
-    emailVerifiedAt: identifierWasEmail ? new Date() : undefined,
-    mobileVerifiedAt: identifierWasEmail ? undefined : new Date(),
+    // B18: a signup that skipped the code by policy proved ownership of neither contact method.
+    emailVerifiedAt: skippedByPolicy ? undefined : identifierWasEmail ? new Date() : undefined,
+    mobileVerifiedAt: skippedByPolicy ? undefined : identifierWasEmail ? undefined : new Date(),
   });
 
   await record({
@@ -206,6 +252,7 @@ export async function setPassword(input: SetPasswordInput, meta: RequestMeta): P
     entityId: created.id,
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
+    metadata: skippedByPolicy ? { contactVerified: false, policy: "SIGNUP_VERIFICATION:OTP_NOT_REQUIRED" } : { contactVerified: true },
   });
 
   const { sessionToken, expiresAt } = await issueSession(created, meta);
@@ -300,7 +347,10 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
   }
 
   const knownDevice = meta.deviceId ? await isKnownDevice(user.id, meta.deviceId) : false;
-  if (!knownDevice) {
+  // B18: policy NEW_DEVICE_LOGIN. The password above has ALREADY been verified and the account is ACTIVE; the policy
+  // only decides whether an unrecognised device must also pass the emailed/SMS code.
+  const deviceOtpRequired = knownDevice ? false : await platformSettings.isOtpRequired("NEW_DEVICE_LOGIN");
+  if (!knownDevice && deviceOtpRequired) {
     // Correct credentials, but a device we've never issued this user a
     // session on — step up via a NEW_DEVICE OTP instead of granting a
     // session outright. Still recorded as a successful *credential* check
@@ -340,6 +390,7 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
     entityId: user.id,
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
+    metadata: !knownDevice ? { newDevice: true, deviceId: meta.deviceId ?? null, policy: "NEW_DEVICE_LOGIN:OTP_NOT_REQUIRED" } : undefined,
   });
 
   return { user: toPublicUser(user), sessionToken, expiresAt: expiresAt.toISOString() };

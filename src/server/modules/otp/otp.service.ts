@@ -35,6 +35,8 @@ import {
   timingSafeEqualHex,
 } from "@/server/lib/otp-hash";
 import { getOtpProvider } from "./providers/factory";
+import { missingMailerSettings } from "@/server/lib/mailer";
+import { SmsOtpProvider } from "./providers/sms.provider";
 import * as otpConfigRepo from "./otp-config.repository";
 import * as otpRepo from "./otp.repository";
 import type { OtpMethod, OtpPurpose } from "./otp.types";
@@ -119,6 +121,28 @@ export async function requestOtp(input: RequestOtpInput): Promise<RequestOtpResu
     expiresInSeconds: config.otpExpirySeconds,
     resendAvailableAt: new Date(now + config.resendCooldownSeconds * 1000).toISOString(),
   };
+}
+
+export interface OtpDeliveryReadiness {
+  channel: OtpMethod;
+  /** A code could be delivered right now on the active channel (OTP enabled and a configured provider or the non-production dev provider). */
+  ready: boolean;
+  devMode: boolean;
+  /** Names (never values) of the environment variables still missing for the active channel. */
+  missing: string[];
+}
+
+/** Read-only status for the Super Admin screen: would a sign-up code actually reach the person? Never sends anything. */
+export async function getOtpDeliveryReadiness(): Promise<OtpDeliveryReadiness> {
+  const config = await otpConfigRepo.get();
+  const provider = getOtpProvider(config.activeMethod, config.devMode);
+  const ready = config.enabled && provider.isConfigured();
+  let missing: string[] = [];
+  if (!ready && config.enabled) {
+    if (config.activeMethod === "EMAIL") missing = missingMailerSettings();
+    else if (config.activeMethod === "SMS") missing = new SmsOtpProvider().missingSettings();
+  }
+  return { channel: config.activeMethod, ready, devMode: config.devMode, missing };
 }
 
 /** The platform's currently active OTP delivery channel — callers that
@@ -269,4 +293,38 @@ export async function consumeTicket(identifier: string, purpose: OtpPurpose, tic
 
   await otpRepo.consumeTicket(row.id);
   return { userId: row.userId, metadata: row.metadata };
+}
+
+/**
+ * B18: mint a ticket WITHOUT a code, for a workflow the Super Admin has switched to OTP_NOT_REQUIRED
+ * (see platform-settings.service.ts). Only the server calls this, after it has read the policy; it is never reachable
+ * from a request body. The row is created already-consumed with a flag in its metadata so audit queries and
+ * `setPassword` can tell a policy-skipped signup from a verified one. Purpose isolation, single use and expiry
+ * work exactly as for a verified ticket.
+ */
+export async function issuePolicyTicket(input: {
+  identifier: string;
+  purpose: OtpPurpose;
+  metadata: Record<string, unknown>;
+  meta: { ipAddress?: string | null; userAgent?: string | null };
+}): Promise<{ ticket: string; ticketExpiresAt: string }> {
+  const config = await otpConfigRepo.get();
+  const ticket = generateVerificationTicket();
+  const ticketExpiresAt = new Date(Date.now() + TICKET_TTL_SECONDS * 1000);
+  const row = await otpRepo.create({
+    purpose: input.purpose,
+    channel: config.activeMethod,
+    identifier: input.identifier,
+    // No code exists. The hash is of random bytes nobody holds, so this row can never be "verified" later.
+    codeHash: hashOtpCode(generateOtpCode(Math.max(config.otpLength, 6)), input.identifier, input.purpose),
+    attempts: 0,
+    maxAttempts: 0,
+    expiresAt: new Date(),
+    consumedAt: new Date(),
+    metadata: { ...input.metadata, otpSkippedByPolicy: true },
+    ipAddress: input.meta.ipAddress ?? undefined,
+    userAgent: input.meta.userAgent ?? undefined,
+  });
+  await otpRepo.setTicket(row.id, hashVerificationTicket(ticket), ticketExpiresAt);
+  return { ticket, ticketExpiresAt: ticketExpiresAt.toISOString() };
 }
