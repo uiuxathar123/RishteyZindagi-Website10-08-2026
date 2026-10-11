@@ -66,6 +66,7 @@ const PERMISSIONS = [
   // master brief's "do not grant STAFF_ADMIN broad access simply for
   // convenience" instruction — see BACKEND.md's B9 section.
   { key: "audit.view", description: "View platform-wide admin audit logs." },
+  { key: "groups.manage", description: "Create and edit community groups, hide posts, and remove members from groups." },
 ];
 
 // SUPER_ADMIN gets every permission; STAFF_ADMIN gets a deliberately

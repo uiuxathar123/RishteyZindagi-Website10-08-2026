@@ -21,6 +21,7 @@ import {
   IndianRupee,
   ScrollText,
   UserX,
+  MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, needs: ["users.view"] },
   { href: "/admin/users", label: "Users", icon: Users, needs: ["users.view"] },
   { href: "/admin/profiles", label: "Profile Approvals", icon: UserCheck, needs: ["users.view", "profiles.verify"] },
+  { href: "/admin/groups", label: "Community Groups", icon: MessagesSquare, needs: ["groups.manage"] },
   { href: "/admin/reports", label: "Reports", icon: Flag, needs: ["reports.resolve"] },
   { href: "/admin/account-deletions", label: "Account Deletions", icon: UserX, needs: ["users.view"] },
   { href: "/admin/settings", label: "Settings", icon: Settings },
