@@ -19,6 +19,20 @@ const REDACTED_KEYS = new Set([
   "secret",
   "cardnumber",
   "cvv",
+  // Provider credentials / proofs. Nothing logs these today (log lines carry fixed fields only); listed so a future
+  // careless `logError(..., { ...payload })` cannot leak them.
+  "razorpay_signature",
+  "razorpaysignature",
+  "keysecret",
+  "key_secret",
+  "webhooksecret",
+  "clientsecret",
+  "client_secret",
+  "smtp_pass",
+  "smtppass",
+  "passphrase",
+  "privatekey",
+  "private_key",
 ]);
 
 function redact(value: unknown, depth = 0): unknown {
