@@ -85,6 +85,55 @@
       "when": 1791443585224,
       "tag": "0011_pcp_production_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791491413209,
+      "tag": "0012_b18_admin_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791527672920,
+      "tag": "0013_b19_profile_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791528009954,
+      "tag": "0014_b19_otp_purposes",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791528162099,
+      "tag": "0015_b19_contact_stories",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791528777352,
+      "tag": "0016_b19_digest_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791529110417,
+      "tag": "0017_b19_community_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791529413377,
+      "tag": "0018_b19_renewal_cycles",
+      "breakpoints": true
     }
   ]
 }

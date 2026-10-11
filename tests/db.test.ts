@@ -8,7 +8,7 @@ describe("database", () => {
     expect(result.rows[0]).toEqual({ one: 1 });
   });
 
-  it("has every migration applied — all 48 B1+B2 tables exist, plus B5 gap-fix's additive matching_weight_configs, B6's additive behaviour_events/account_suspensions, B11's additive device_push_tokens, and PCP's five additive production tables (57 total)", async () => {
+  it("has every migration applied — all 48 B1+B2 tables exist, plus B5 gap-fix's additive matching_weight_configs, B6's additive behaviour_events/account_suspensions, B11's additive device_push_tokens, and PCP's five additive production tables (57 total), then B18's additive platform_settings (58 total), then B19's eight additive tables (66 total)", async () => {
     const result = await db.execute(sql`
       select table_name from information_schema.tables
       where table_schema = 'public' and table_type = 'BASE TABLE'
@@ -96,6 +96,17 @@ describe("database", () => {
       "account_bans",
       "job_runs",
       "rate_limit_counters",
+      "platform_settings",
+      // B19 (owner-approved additive tables; drizzle/0015–0018): contact form inbox, success stories, weekly-digest log,
+      // community groups (groups, members, posts, post reports) and renewal follow-up cycles — 66 in total.
+      "contact_messages",
+      "success_stories",
+      "digest_log",
+      "community_groups",
+      "community_group_members",
+      "community_group_posts",
+      "community_post_reports",
+      "renewal_cycles",
     ];
 
     for (const table of expected) {
