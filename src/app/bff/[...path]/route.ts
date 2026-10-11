@@ -28,7 +28,9 @@ export const runtime = "nodejs";
 
 const SAFE_SEGMENT = /^[A-Za-z0-9._~@-]+$/;
 const FORWARDED_REQUEST_HEADERS = ["content-type", "accept", "user-agent", "x-forwarded-for", "x-real-ip"];
-const RELAYED_RESPONSE_HEADERS = ["content-type", "content-disposition", "content-length", "content-language"];
+const RELAYED_RESPONSE_HEADERS = ["content-type", "content-disposition", "content-length", "content-language", "x-accel-buffering"];
+// Relayed on every response, JSON included, so clients can honour rate-limit back-off.
+const RELAYED_ALWAYS = ["retry-after"];
 
 function fail(status: number, code: string, message: string) {
   const res = NextResponse.json({ success: false, error: { code, message } }, { status });
@@ -158,6 +160,11 @@ async function handle(req: NextRequest, { params }: { params: { path: string[] }
       const v = upstream.headers.get(name);
       if (v) res.headers.set(name, v);
     }
+  }
+
+  for (const name of RELAYED_ALWAYS) {
+    const v = upstream.headers.get(name);
+    if (v) res.headers.set(name, v);
   }
 
   // Session end: explicit logout, or the backend said the session is invalid.

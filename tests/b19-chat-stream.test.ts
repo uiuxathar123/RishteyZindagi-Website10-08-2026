@@ -14,6 +14,8 @@ import { PATCH as respondInterest } from "@/app/api/v1/interactions/interests/[i
 import { POST as openChat } from "@/app/api/v1/chats/route";
 import { POST as sendMessage } from "@/app/api/v1/chats/[chatId]/messages/route";
 import { GET as streamRoute } from "@/app/api/v1/chats/[chatId]/stream/route";
+import { GET as bffChatStream } from "@/app/bff/[...path]/route";
+import { MEMBER_COOKIE } from "@/lib/bff/config";
 import { __openStreamCountForTests, MAX_STREAMS_PER_USER } from "@/server/modules/chat/chat-stream";
 import { __resetRateLimitsForTests } from "@/server/middleware/rate-limit";
 import { resetTransactionalTables, resetAdminUsers, resetOtpConfigForTests, resetMatchingWeightsForTests, activateMembershipForTests } from "./helpers/reset-db";
@@ -71,6 +73,29 @@ beforeEach(async () => {
 });
 
 describe("chat stream (SSE)", () => {
+  it("[cs-bff] preserves stream headers through the same-origin proxy", async () => {
+    const body = "event: ready\n\n";
+    const upstream = new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream; charset=utf-8", "x-accel-buffering": "no", "retry-after": "12" },
+    });
+    const fetchMock = vi.fn(async () => upstream);
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const req = new NextRequest("http://localhost/bff/chats/test-chat/stream", {
+        headers: { cookie: `${MEMBER_COOKIE}=test-session-token` },
+      });
+      const res = await bffChatStream(req, { params: { path: ["chats", "test-chat", "stream"] } });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+      expect(res.headers.get("x-accel-buffering")).toBe("no");
+      expect(res.headers.get("retry-after")).toBe("12");
+      expect(await res.text()).toBe(body);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("[cs-authz] needs a session; a non-participant gets the same 403 as the REST endpoints", async () => {
     const { chatId } = await chatPair(refs, "cs-authz");
     const stranger = await buildReadyProfile("cs-authz-x", refs, { gender: "MALE" });
