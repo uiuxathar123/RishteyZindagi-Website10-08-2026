@@ -5,6 +5,10 @@ import { StarRating } from "@/components/ui/StarRating";
 import { TESTIMONIALS } from "@/data/testimonials";
 import { Quote } from "lucide-react";
 import Image from "next/image";
+import { listPublishedStories } from "@/server/modules/content/content.service";
+
+// Published stories are managed by an admin at runtime (Admin → Success Stories).
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Success Stories",
@@ -12,7 +16,49 @@ export const metadata: Metadata = {
   alternates: { canonical: "/success-stories" },
 };
 
-export default function SuccessStoriesPage() {
+export default async function SuccessStoriesPage() {
+  let real: Awaited<ReturnType<typeof listPublishedStories>> = [];
+  try {
+    real = await listPublishedStories();
+  } catch {
+    /* database unreachable: show the labelled samples */
+  }
+  if (real.length > 0) {
+    return (
+      <>
+        <Section className="bg-rz-cream !pb-10">
+          <Container className="max-w-2xl text-center">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-rz-maroon">Success Stories</p>
+            <h1 className="mb-4 font-serif text-4xl font-bold text-rz-navy md:text-5xl">Happy endings, in their own words</h1>
+            <p className="text-[15.5px] leading-relaxed text-rz-muted">Shared with the couples&apos; permission.</p>
+          </Container>
+        </Section>
+        <Section className="!pt-0">
+          <Container>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3" data-testid="real-stories">
+              {real.map((t) => (
+                <figure key={t.id} className="flex min-w-0 flex-col rounded-xl border border-rz-border bg-white p-6 shadow-card-sm">
+                  <Quote className="mb-3 h-6 w-6 text-rz-gold" fill="currentColor" strokeWidth={0} />
+                  <blockquote className="mb-5 flex-1 whitespace-pre-line text-[14.5px] leading-relaxed text-rz-text">&ldquo;{t.story}&rdquo;</blockquote>
+                  <figcaption className="border-t border-rz-border pt-4">
+                    <p className="truncate text-sm font-semibold text-rz-navy">{t.coupleNames}</p>
+                    <p className="truncate text-xs text-rz-muted">{t.location} · {t.year}</p>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </Container>
+        </Section>
+        <Section className="bg-rz-navy text-white">
+          <Container className="flex flex-col items-center gap-5 text-center">
+            <h2 className="max-w-lg font-serif text-2xl font-bold md:text-3xl">Found your match on RishteyZindagi?</h2>
+            <p className="max-w-md text-sm text-white/70">We&apos;d love to feature your story. Share it with our team and, with your permission, we&apos;ll add it here.</p>
+            <ButtonLink href="/contact" variant="outline" className="!border-white !bg-transparent !text-white hover:!bg-white/10">Share Your Story</ButtonLink>
+          </Container>
+        </Section>
+      </>
+    );
+  }
   return (
     <>
       <Section className="bg-rz-cream !pb-10">

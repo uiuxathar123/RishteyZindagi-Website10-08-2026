@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Container, Section } from "@/components/ui/Container";
 import { ButtonLink } from "@/components/ui/Button";
-import { HelpCircle, Mail, ShieldAlert, UserCog } from "lucide-react";
+import { HelpCircle, Mail, Phone, ShieldAlert, UserCog } from "lucide-react";
+import { ContactForm } from "@/components/contact/ContactForm";
+import { getPublicSupportContact } from "@/server/modules/content/content.service";
+
+// Support details are edited by an admin at runtime, so this page is rendered per request.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -10,9 +15,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contact" },
 };
 
-// Only an address that is actually configured is ever shown (NEXT_PUBLIC_SUPPORT_EMAIL).
-// There is no contact-form endpoint on the backend, so there is no form either.
-const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "";
+// Only details that are actually configured are ever shown: an admin enters them under Admin → Support Inbox
+// (stored in platform settings); NEXT_PUBLIC_SUPPORT_EMAIL remains a fallback for the e-mail address.
 
 const HELP_CARDS = [
   {
@@ -38,38 +42,51 @@ const HELP_CARDS = [
   },
 ];
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  let support = { email: "", phone: "", hours: "" };
+  try {
+    support = await getPublicSupportContact();
+  } catch {
+    /* database unreachable: fall back to the build-time address only */
+  }
+  const SUPPORT_EMAIL = support.email || process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "";
   return (
     <Section>
       <Container className="max-w-3xl">
         <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-rz-maroon">Contact Us</p>
         <h1 className="mb-4 font-serif text-3xl font-bold text-rz-navy md:text-4xl">We&apos;re here to help</h1>
         <p className="mb-8 text-[15.5px] leading-relaxed text-rz-muted">
-          Here is the quickest way to get help today.
+          Write to us below, or use one of the quick options.
         </p>
 
-        {SUPPORT_EMAIL ? (
-          <a
-            href={`mailto:${SUPPORT_EMAIL}`}
-            className="rz-focus mb-8 flex items-center gap-4 rounded-lg border border-rz-border bg-white p-4"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rz-peach text-rz-navy">
-              <Mail className="h-5 w-5" strokeWidth={1.8} />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-xs font-semibold uppercase tracking-wide text-rz-muted">Email us</span>
-              <span className="block break-all text-sm font-medium text-rz-navy">{SUPPORT_EMAIL}</span>
-            </span>
-          </a>
-        ) : (
-          <div className="mb-8 rounded-lg border border-dashed border-rz-border bg-rz-cream/60 p-5 text-sm leading-relaxed text-rz-text">
-            <p className="font-semibold text-rz-navy">Direct contact channels are coming soon.</p>
-            <p className="mt-1 text-rz-muted">
-              A support email, phone and contact form have not been published yet, so there is nothing to send a
-              message to from this page. The options below work today.
-            </p>
+        {(SUPPORT_EMAIL || support.phone) && (
+          <div className="mb-8 grid gap-3 sm:grid-cols-2" data-testid="support-details">
+            {SUPPORT_EMAIL && (
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="rz-focus flex items-center gap-4 rounded-lg border border-rz-border bg-white p-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rz-peach text-rz-navy"><Mail className="h-5 w-5" strokeWidth={1.8} /></span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-rz-muted">Email us</span>
+                  <span className="block break-all text-sm font-medium text-rz-navy">{SUPPORT_EMAIL}</span>
+                </span>
+              </a>
+            )}
+            {support.phone && (
+              <a href={`tel:${support.phone.replace(/[^0-9+]/g, "")}`} className="rz-focus flex items-center gap-4 rounded-lg border border-rz-border bg-white p-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rz-peach text-rz-navy"><Phone className="h-5 w-5" strokeWidth={1.8} /></span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-rz-muted">Call us</span>
+                  <span className="block text-sm font-medium text-rz-navy">{support.phone}</span>
+                  {support.hours && <span className="block text-xs text-rz-muted">{support.hours}</span>}
+                </span>
+              </a>
+            )}
           </div>
         )}
+
+        <div className="mb-10">
+          <h2 className="mb-3 font-serif text-xl font-semibold text-rz-navy">Send us a message</h2>
+          <ContactForm />
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
           {HELP_CARDS.map(({ icon: Icon, title, text, href, cta }) => (
