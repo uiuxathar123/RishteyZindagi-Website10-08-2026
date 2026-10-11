@@ -5,11 +5,12 @@
  * state is touched here.
  *
  * §5 scope boundary (documented again here + BACKEND.md): a plan's
- * `features` jsonb (unlimitedInterests / advancedSearch / shortlist /
- * visibilityBoost) is returned as-is, informational/marketing metadata
- * only — this endpoint does not compute or enforce anything from it.
- * Only `visibilityBoost` (via visibility-boost.ts) is a real, separately
- * enforced mechanism; everything else in `features` is display-only.
+ * `features` jsonb (chat / advancedSearch / visibilityBoost) is returned
+ * as-is — this endpoint does not compute or enforce anything from it.
+ * B18: every flag listed there is enforced elsewhere (chat and
+ * advancedSearch in membership-gate.ts, visibilityBoost in
+ * visibility-boost.ts). The old shortlist / unlimitedInterests flags were
+ * retired: those features are open to every member.
  */
 import * as repo from "./membership-plans.repository";
 import type { MembershipPlanRow } from "./membership-plans.repository";

@@ -21,6 +21,7 @@ import {
   IndianRupee,
   ScrollText,
   UserX,
+  BadgePercent,
   MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
@@ -57,6 +58,7 @@ const SUPER_ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/super", label: "Super Overview", icon: Crown },
   { href: "/admin/super/staff", label: "Staff & Roles", icon: UserCog },
   { href: "/admin/super/settings", label: "Platform Settings", icon: SlidersHorizontal, needs: ["platform.settings.manage"] },
+  { href: "/admin/super/membership-plans", label: "Membership Plans", icon: BadgePercent, needs: ["plans.manage"] },
   { href: "/admin/super/revenue", label: "Revenue", icon: IndianRupee, needs: ["payments.review"] },
   { href: "/admin/super/audit-log", label: "Audit Log", icon: ScrollText, needs: ["audit.view"] },
 ];
@@ -102,7 +104,9 @@ function NavLink({
 function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { can, isSuper } = useAdminSession();
   const visible = (item: NavItem) => !item.needs || item.needs.every(can);
-  const main = NAV_ITEMS.filter(visible);
+  // B18: staff with plans.manage can reach plan management.
+  const delegated = isSuper ? [] : SUPER_ADMIN_NAV_ITEMS.filter((i) => i.href === "/admin/super/membership-plans" && visible(i));
+  const main = [...NAV_ITEMS.filter(visible), ...delegated];
   const superItems = isSuper ? SUPER_ADMIN_NAV_ITEMS.filter(visible) : [];
   return (
     <nav aria-label="Admin" className="flex flex-1 flex-col gap-1 px-3 py-4">

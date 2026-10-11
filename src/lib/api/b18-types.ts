@@ -12,3 +12,16 @@ export interface OtpPolicyView {
   neverConfigurable: Array<{ key: string; label: string; reason: string }>;
   delivery: { channel: string; ready: boolean; devMode: boolean; missing: string[] };
 }
+
+export interface AdminPlanRow {
+  id: string;
+  code: string;
+  name: string;
+  currency: string;
+  priceInSmallestUnit: number;
+  durationDays: number;
+  isActive: boolean;
+  features: { chat: boolean; advancedSearch: boolean; visibilityBoost: boolean };
+  activeMembers: number;
+  createdAt: string;
+}

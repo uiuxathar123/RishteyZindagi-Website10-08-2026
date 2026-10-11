@@ -66,6 +66,7 @@ const PERMISSIONS = [
   // master brief's "do not grant STAFF_ADMIN broad access simply for
   // convenience" instruction — see BACKEND.md's B9 section.
   { key: "audit.view", description: "View platform-wide admin audit logs." },
+  { key: "plans.manage", description: "Create and edit membership plans: prices, durations, entitlements, activation." },
   { key: "groups.manage", description: "Create and edit community groups, hide posts, and remove members from groups." },
 ];
 
@@ -311,11 +312,12 @@ const PAYMENT_GATEWAYS = [
 // fixed day-counts (90/180), not calendar-month arithmetic — see
 // plan-tiers.ts's own doc comment for why.
 //
-// `features` is informational/marketing metadata ONLY (see §5 of the B8
-// brief, documented again in membership-plans.service.ts) — only
-// `visibilityBoost` is a real, separately-enforced mechanism
-// (visibility-boost.ts); `unlimitedInterests`/`advancedSearch`/
-// `shortlist` are never metered or gated anywhere in this phase.
+// `features` lists ONLY entitlements the server actually enforces:
+// `chat` (membership-gate.ts hasActiveMembership), `advancedSearch`
+// (B18, membership-gate.ts hasAdvancedSearchEntitlement) and
+// `visibilityBoost` (visibility-boost.ts). Shortlist and interests are open
+// to every member (owner decision, B18), so the old `shortlist` /
+// `unlimitedInterests` flags were removed rather than left implying a paywall.
 const MEMBERSHIP_PLANS = [
   {
     code: "PLAN_7DAY_INR",
@@ -339,7 +341,7 @@ const MEMBERSHIP_PLANS = [
     currency: "INR",
     durationDays: 30,
     priceInPaise: 99900, // Rs. 999 — placeholder
-    features: { chat: true, unlimitedInterests: true },
+    features: { chat: true },
   },
   {
     code: "PLAN_MONTHLY_USD",
@@ -347,7 +349,7 @@ const MEMBERSHIP_PLANS = [
     currency: "USD",
     durationDays: 30,
     priceInPaise: 1999, // $19.99 — placeholder
-    features: { chat: true, unlimitedInterests: true },
+    features: { chat: true },
   },
   {
     code: "PLAN_3MONTH_INR",
@@ -355,7 +357,7 @@ const MEMBERSHIP_PLANS = [
     currency: "INR",
     durationDays: 90,
     priceInPaise: 249900, // Rs. 2,499 — placeholder
-    features: { chat: true, unlimitedInterests: true, shortlist: true, advancedSearch: true },
+    features: { chat: true, advancedSearch: true },
   },
   {
     code: "PLAN_3MONTH_USD",
@@ -363,7 +365,7 @@ const MEMBERSHIP_PLANS = [
     currency: "USD",
     durationDays: 90,
     priceInPaise: 4999, // $49.99 — placeholder
-    features: { chat: true, unlimitedInterests: true, shortlist: true, advancedSearch: true },
+    features: { chat: true, advancedSearch: true },
   },
   {
     code: "PLAN_6MONTH_INR",
@@ -371,7 +373,7 @@ const MEMBERSHIP_PLANS = [
     currency: "INR",
     durationDays: 180,
     priceInPaise: 449900, // Rs. 4,499 — placeholder
-    features: { chat: true, unlimitedInterests: true, shortlist: true, advancedSearch: true, visibilityBoost: true },
+    features: { chat: true, advancedSearch: true, visibilityBoost: true },
   },
   {
     code: "PLAN_6MONTH_USD",
@@ -379,7 +381,7 @@ const MEMBERSHIP_PLANS = [
     currency: "USD",
     durationDays: 180,
     priceInPaise: 8999, // $89.99 — placeholder
-    features: { chat: true, unlimitedInterests: true, shortlist: true, advancedSearch: true, visibilityBoost: true },
+    features: { chat: true, advancedSearch: true, visibilityBoost: true },
   },
 ];
 
@@ -402,10 +404,8 @@ async function seedPaymentAndMembershipReferenceData(db: NodePgDatabase<typeof s
     await db
       .insert(schema.membershipPlans)
       .values(plan)
-      .onConflictDoUpdate({
-        target: schema.membershipPlans.code,
-        set: { name: plan.name, currency: plan.currency, durationDays: plan.durationDays, priceInPaise: plan.priceInPaise, features: plan.features },
-      });
+      // B18: re-seeding adds missing plans without overwriting admin-managed values.
+      .onConflictDoNothing({ target: schema.membershipPlans.code });
   }
 }
 

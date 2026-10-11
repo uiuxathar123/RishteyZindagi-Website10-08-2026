@@ -32,9 +32,9 @@
  * real-time-read discipline B5's weight config and B6's suspension-state
  * checks already established in this codebase, not a new pattern.
  */
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { memberships } from "@/server/db/schema";
+import { memberships, membershipPlans } from "@/server/db/schema";
 
 /**
  * True only when this user has a `memberships` row with `status =
@@ -52,6 +52,29 @@ export async function hasActiveMembership(userId: string): Promise<boolean> {
         eq(memberships.userId, userId),
         eq(memberships.status, "ACTIVE"),
         or(isNull(memberships.expiresAt), gt(memberships.expiresAt, now))
+      )
+    )
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * B18: true only when the user has an ACTIVE, unexpired membership whose
+ * plan's `features.advancedSearch` is `true`. Read fresh on every call
+ * (same no-caching discipline as `hasActiveMembership`). Never throws.
+ */
+export async function hasAdvancedSearchEntitlement(userId: string): Promise<boolean> {
+  const now = new Date();
+  const [row] = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .innerJoin(membershipPlans, eq(memberships.planId, membershipPlans.id))
+    .where(
+      and(
+        eq(memberships.userId, userId),
+        eq(memberships.status, "ACTIVE"),
+        or(isNull(memberships.expiresAt), gt(memberships.expiresAt, now)),
+        sql`(${membershipPlans.features} ->> 'advancedSearch') = 'true'`
       )
     )
     .limit(1);
