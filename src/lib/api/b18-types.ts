@@ -25,3 +25,13 @@ export interface AdminPlanRow {
   activeMembers: number;
   createdAt: string;
 }
+export interface SecurityEventRow {
+  id: string;
+  source: "LOGIN_ATTEMPT" | "AUDIT";
+  occurredAt: string;
+  kind: string;
+  actorType: "USER" | "ADMIN" | "SYSTEM" | "UNKNOWN";
+  subject: string | null;
+  ipAddress: string | null;
+  detail: string | null;
+}

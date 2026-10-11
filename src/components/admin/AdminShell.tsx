@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   IndianRupee,
   ScrollText,
+  ShieldAlert,
   UserX,
   BadgePercent,
   MessagesSquare,
@@ -61,6 +62,7 @@ const SUPER_ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/super/membership-plans", label: "Membership Plans", icon: BadgePercent, needs: ["plans.manage"] },
   { href: "/admin/super/revenue", label: "Revenue", icon: IndianRupee, needs: ["payments.review"] },
   { href: "/admin/super/audit-log", label: "Audit Log", icon: ScrollText, needs: ["audit.view"] },
+  { href: "/admin/super/security-events", label: "Security Events", icon: ShieldAlert, needs: ["audit.view"] },
 ];
 
 function isActive(pathname: string, href: string) {
