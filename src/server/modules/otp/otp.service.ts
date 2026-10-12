@@ -34,8 +34,8 @@ import {
   hashVerificationTicket,
   timingSafeEqualHex,
 } from "@/server/lib/otp-hash";
-import { getOtpProvider } from "./providers/factory";
 import { missingMailerSettings } from "@/server/lib/mailer";
+import { getOtpProvider } from "./providers/factory";
 import { SmsOtpProvider } from "./providers/sms.provider";
 import * as otpConfigRepo from "./otp-config.repository";
 import * as otpRepo from "./otp.repository";
@@ -61,6 +61,9 @@ export interface RequestOtpInput {
    * device id. Never contains a password or the OTP code itself. */
   metadata?: Record<string, unknown>;
   meta: { ipAddress?: string | null; userAgent?: string | null };
+  /** B19: deliver over this channel instead of the platform's active one. Used by the admin second factor, whose
+   * identifier is an admin e-mail address that the SMS/WhatsApp providers cannot resolve. Absent = active channel. */
+  channel?: OtpMethod;
 }
 
 export interface RequestOtpResult {
@@ -93,7 +96,8 @@ export async function requestOtp(input: RequestOtpInput): Promise<RequestOtpResu
   // active channel has no real provider configured) must never invalidate
   // a still-live prior code, consume a resend slot that produced nothing,
   // or leave behind an OTP row nobody could ever have received.
-  const provider = getOtpProvider(config.activeMethod, config.devMode);
+  const channel = input.channel ?? config.activeMethod;
+  const provider = getOtpProvider(channel, config.devMode);
   await provider.send({
     to: input.identifier,
     code,
@@ -104,7 +108,7 @@ export async function requestOtp(input: RequestOtpInput): Promise<RequestOtpResu
   await otpRepo.invalidateActive(input.identifier, input.purpose);
   await otpRepo.create({
     purpose: input.purpose,
-    channel: config.activeMethod,
+    channel,
     identifier: input.identifier,
     userId: input.userId,
     codeHash,
@@ -117,10 +121,18 @@ export async function requestOtp(input: RequestOtpInput): Promise<RequestOtpResu
   });
 
   return {
-    channel: config.activeMethod,
+    channel,
     expiresInSeconds: config.otpExpirySeconds,
     resendAvailableAt: new Date(now + config.resendCooldownSeconds * 1000).toISOString(),
   };
+}
+
+/** B19: true when a code could be e-mailed right now (OTP enabled and either a configured SMTP relay or the
+ * non-production dev provider). Used to refuse switching on admin MFA when it could never be satisfied. */
+export async function canDeliverEmailOtp(): Promise<boolean> {
+  const config = await otpConfigRepo.get();
+  if (!config.enabled) return false;
+  return getOtpProvider("EMAIL", config.devMode).isConfigured();
 }
 
 export interface OtpDeliveryReadiness {
@@ -223,20 +235,18 @@ async function verifyAndConsume(identifier: string, purpose: OtpPurpose, code: s
   if (!row) throw genericError();
 
   if (row.attempts >= row.maxAttempts) {
-    await otpRepo.markInvalidated(row.id);
+    await otpRepo.invalidateExhausted(row.id);
     throw genericError();
   }
 
   const candidateHash = hashOtpCode(code, identifier, purpose);
   if (!timingSafeEqualHex(candidateHash, row.codeHash)) {
-    const updated = await otpRepo.incrementAttempts(row.id);
-    if (updated.attempts >= updated.maxAttempts) {
-      await otpRepo.markInvalidated(row.id);
-    }
+    await otpRepo.incrementAttempts(row.id);
     throw genericError();
   }
 
-  await otpRepo.markConsumed(row.id);
+  const consumed = await otpRepo.consumeActive(row.id, identifier, purpose);
+  if (!consumed) throw genericError();
   return { otpId: row.id, userId: row.userId, metadata: row.metadata };
 }
 
@@ -285,13 +295,15 @@ export interface ConsumedTicket {
  * it hasn't already been consumed, and that it hasn't expired. */
 export async function consumeTicket(identifier: string, purpose: OtpPurpose, ticket: string): Promise<ConsumedTicket> {
   const genericError = () => new AuthenticationError("Invalid or expired verification ticket.");
-  const row = await otpRepo.findByTicketHash(hashVerificationTicket(ticket));
+  const ticketHash = hashVerificationTicket(ticket);
+  const row = await otpRepo.findByTicketHash(ticketHash);
 
   if (!row || row.identifier !== identifier || row.purpose !== purpose) throw genericError();
   if (row.ticketConsumedAt) throw genericError();
   if (!row.ticketExpiresAt || row.ticketExpiresAt.getTime() < Date.now()) throw genericError();
 
-  await otpRepo.consumeTicket(row.id);
+  const consumed = await otpRepo.consumeTicket(row.id, identifier, purpose, ticketHash);
+  if (!consumed) throw genericError();
   return { userId: row.userId, metadata: row.metadata };
 }
 

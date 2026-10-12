@@ -44,6 +44,13 @@ service-account*.json
 /backups/
 *.dump
 *.sql.gz
+*.gpg
+*.pass
+*.passphrase
+
+# Export archives (verified ZIPs are delivered outside the repo)
+*.zip
+*.sha256
 
 # B3/B8: local-disk dev storage adapter's uploaded photos and generated
 # invoice PDFs (see src/server/modules/storage). Runtime data, never
@@ -60,3 +67,6 @@ postgres-data/
 # Prisma leftovers (the project uses Drizzle; kept for safety)
 prisma/dev.db
 prisma/*.db
+
+# Local safety snapshots; never commit backup copies
+/_backups/

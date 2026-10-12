@@ -69,7 +69,7 @@ function cookieOptions(maxAgeSeconds: number, admin: boolean) {
 
 async function handle(req: NextRequest, { params }: { params: { path: string[] } }) {
   const method = req.method.toUpperCase();
-  if (!["GET", "POST", "PATCH", "DELETE"].includes(method)) {
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
     return fail(405, "METHOD_NOT_ALLOWED", "Method not allowed.");
   }
   if (method !== "GET" && !sameOriginOk(req)) {
@@ -93,7 +93,8 @@ async function handle(req: NextRequest, { params }: { params: { path: string[] }
     if (upstreamSegments.length === 0) return fail(400, "VALIDATION_ERROR", "Invalid path.");
   }
   const upstreamKey = upstreamSegments.join("/");
-  const isLogout = upstreamKey === "auth/logout" || upstreamKey === "auth/logout-all";
+  // PCP: a successful account-deletion request revokes every session server-side, so the cookie is dropped too.
+  const isLogout = upstreamKey === "auth/logout" || upstreamKey === "auth/logout-all" || upstreamKey === "users/me/delete-account";
   const isPublicAuth = PUBLIC_AUTH_PATHS.has(segments.join("/"));
   const cookieName = asAdmin ? ADMIN_COOKIE : MEMBER_COOKIE;
 
@@ -189,5 +190,6 @@ async function handle(req: NextRequest, { params }: { params: { path: string[] }
 
 export const GET = handle;
 export const POST = handle;
+export const PUT = handle;
 export const PATCH = handle;
 export const DELETE = handle;

@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { UnauthorizedRedirect } from "@/components/session/SessionProvider";
+import { SiteStatusBanner } from "@/components/layout/SiteStatusBanner";
 
 const SITE_URL = "https://www.rishteyzindagi.com";
 
@@ -88,6 +89,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={cn(dmSans.variable, playfairDisplay.variable)}>
       <body className="flex min-h-screen flex-col font-sans">
         <UnauthorizedRedirect />
+        <SiteStatusBanner />
         {children}
       </body>
     </html>

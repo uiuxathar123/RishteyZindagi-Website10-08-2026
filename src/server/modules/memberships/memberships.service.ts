@@ -18,6 +18,8 @@
  * codebase doesn't have yet, not something this phase can honestly claim
  * to have built.
  */
+import { hasAdvancedSearchEntitlement } from "./membership-gate";
+import { getSearchSettings } from "@/server/modules/platform-settings/platform-settings.service";
 import { AuthorizationError, NotFoundError } from "@/server/lib/errors";
 import type { AuthContext } from "@/server/middleware/authenticate";
 import { notify } from "@/server/modules/notifications/notifications.service";
@@ -38,19 +40,27 @@ export interface MyMembershipView {
   planCode: string | null;
   planName: string | null;
   isActive: boolean;
+  /** B18: what the member's current plan unlocks — the UI uses it to show locked filters; the server enforces independently. */
+  entitlements: { advancedSearch: boolean };
+}
+
+async function advancedSearchAllowed(userId: string): Promise<boolean> {
+  const settings = await getSearchSettings();
+  return !settings.enforceAdvancedSearchEntitlement || (await hasAdvancedSearchEntitlement(userId));
 }
 
 export async function getMyMembership(ctx: AuthContext): Promise<MyMembershipView> {
   const userId = requireMemberSubject(ctx);
   const raw = await repo.findMostRecentForUser(userId);
-  if (!raw) return { membership: null, planCode: null, planName: null, isActive: false };
+  const entitlements = { advancedSearch: await advancedSearchAllowed(userId) };
+  if (!raw) return { membership: null, planCode: null, planName: null, isActive: false, entitlements };
   // Opportunistic display-freshness — see memberships.repository.ts's
   // markExpiredIfPast doc comment: never relied upon for correctness,
   // only for not showing a stale "ACTIVE" label after expiry has passed.
   const membership = await repo.markExpiredIfPast(raw);
   const plan = await plansRepo.findById(membership.planId);
   const isActive = membership.status === "ACTIVE" && (!membership.expiresAt || membership.expiresAt.getTime() > Date.now());
-  return { membership, planCode: plan?.code ?? null, planName: plan?.name ?? null, isActive };
+  return { membership, planCode: plan?.code ?? null, planName: plan?.name ?? null, isActive, entitlements };
 }
 
 export async function listMyMembershipHistory(ctx: AuthContext): Promise<MembershipRow[]> {

@@ -1,6 +1,8 @@
 import type { JobDefinition } from "./types";
 import { housekeepingJob } from "./definitions/housekeeping";
 import { membershipExpiryJob, membershipRemindersJob, membershipRenewalFailedJob } from "./definitions/membership";
+import { membershipDunningJob } from "./definitions/dunning";
+import { memberDigestJob } from "./definitions/digest";
 import { paymentReconcileJob, accountDeletionFinalizeJob } from "./definitions/payments";
 
 const jobs: JobDefinition[] = [
@@ -10,6 +12,8 @@ const jobs: JobDefinition[] = [
   membershipRenewalFailedJob,
   paymentReconcileJob,
   accountDeletionFinalizeJob,
+  memberDigestJob,
+  membershipDunningJob,
 ];
 
 /** Jobs registered later in the phase are appended by their own modules via registerJob(). */

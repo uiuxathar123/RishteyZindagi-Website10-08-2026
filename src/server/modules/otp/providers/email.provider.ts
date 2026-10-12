@@ -16,6 +16,8 @@ const PURPOSE_LABEL: Record<string, string> = {
   FORGOT_PASSWORD: "reset your password",
   NEW_DEVICE: "verify this new device",
   ACCOUNT_RECOVERY: "recover your account",
+  ADMIN_MFA: "finish signing in to the Admin Panel",
+  CONTACT_CHANGE: "confirm your new contact details",
 };
 
 export class EmailOtpProvider implements OtpProvider {

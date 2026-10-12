@@ -64,8 +64,8 @@ export function SettingsClient() {
         </NotAvailable>
       )}
 
-      <NotAvailable title="Operational switches are not available yet">
-        Maintenance mode, closing sign-ups, requiring manual profile approval, email digests and the public support contact details have no backend storage, so they are not shown here rather than pretending to save.
+      <NotAvailable title="Site controls">
+        Maintenance mode, manual profile approval, the weekly digest switch, admin MFA, search and sign-up controls are on the Super Admin Platform Settings page; support contact details are under Support Inbox.
       </NotAvailable>
     </div>
   );

@@ -729,3 +729,145 @@ All envelopes are `{ success, data, message }` / `{ success:false, error:{ code,
 | `GET\|POST /admin/staff`, `PATCH /admin/staff/{id}`, `POST /admin/staff/{id}/reset-password` | `staff.manage` | List / create (one-time temporary password), change role/status, reset password. `SUPER_ADMIN` accounts cannot be created, edited, demoted or disabled through the API; you cannot change your own role or disable yourself; a non-Super actor may only manage roles whose permissions are a subset of their own. |
 | `GET\|POST /admin/roles`, `PUT /admin/roles/{id}/permissions` | `staff.manage` | List/create roles (Super Admin only; `SUPER_ADMIN` itself is protected); replace a role's permission set (Super Admin only). |
 | `POST /admin/me/password` | any admin | Change own password (`currentPassword`, `newPassword` ≥ 10 chars). Clears the temporary-password gate. Wrong current password → 403. |
+
+---
+
+## 21. B18 — Pending features & admin integration (addendum)
+
+Envelope, auth and error conventions are unchanged. Admin routes are listed with the permission they enforce on every request (the full machine-checked table is `B18_PERMISSION_MATRIX.md`, mirrored by `tests/b18-permission-matrix.test.ts`). **Super** = role-name check (`SUPER_ADMIN` only; a Staff Admin can never be granted these).
+
+### 21.1 Search (changed / new)
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /search/profiles` | public (limited view) / member | New filter `profileId` (exact member-facing ID, `RZ` + 8 digits, case-insensitive; any other shape → 400). `sortBy` = `updatedAt` \| `createdAt`, `sortDir` = `asc` \| `desc`, `page`, `pageSize` (1…`maxPageSize`; default from Platform Settings). **Advanced filters** — `profileId`, height range, income range, `educationIds`, `professionIds`/`anyProfession` — need a plan with the `advancedSearch` entitlement *when enforcement is on* (Platform Settings): anonymous or member without the entitlement → 403 `AUTHORIZATION_ERROR` with `details: [{path:"entitlement",message:"advancedSearch"}, …one row per filter used]`. Everything else (gender, age range, religion, community, mother tongue, marital status, country, city) stays free for everyone. A profile whose owner chose **Hide my profile** is never returned. Cards include `photosRestricted` and `lastActive` (see 21.4). |
+| `GET /search/access` | soft-auth (never 401) | `{ audience: "visitor"\|"member", advancedSearch: boolean, advancedFilters: string[] }` — a UI hint so public/marketing pages can show or lock the advanced filters without triggering the member-401 redirect. `/search/profiles` enforces independently. |
+| `GET /memberships/me` | member | Now also returns `entitlements: { advancedSearch, chat, visibilityBoost }`. |
+
+### 21.2 Super Admin controls
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `GET /admin/otp/policy` | **Super** | Per-workflow requirement (`OTP_REQUIRED` / `OTP_NOT_REQUIRED`) for the *configurable* workflows `NEW_DEVICE_LOGIN` and `SIGNUP_VERIFICATION`, plus the list of workflows that are never configurable (password reset, account recovery, OTP-only login, admin login, payments). Also returns the single active provider (`EMAIL` or `FAST2SMS_SMS`) — policy and provider are independent. |
+| `PATCH /admin/otp/policy` | **Super** | Body `{ workflow, requirement, reason? }` (strict). Unknown workflow, or a non-configurable one, → 400. Audited with actor, time, previous and new value. Any read problem falls back to `OTP_REQUIRED`. |
+| `GET\|PATCH /admin/platform-settings` | `platform.settings.manage` | Body `{ search?: { defaultPageSize (5–50), maxPageSize (10–50), enforceAdvancedSearchEntitlement }, signup?: { open, closedMessage } }` (strict; at least one block). Closing sign-up makes `POST /auth/register` answer 503 with `closedMessage` (or a default message); existing members and log-in are unaffected. |
+| `GET\|POST /admin/membership-plans`, `PATCH /admin/membership-plans/{planId}` | `plans.manage` | List, create (`code` `[A-Z0-9_]{3,40}`, `name`, `currency` INR\|USD, `priceInSmallestUnit` ≥ 100, `durationDays` 1–730, `advancedSearch`, `isActive`), edit. `PATCH` body (strict, ≥ 1 field): `name`, `priceInSmallestUnit`, `advancedSearch`, `isActive`. Duration and currency are immutable once created (create a new plan instead). A price change applies to *new* purchases only — every payment and invoice stores the amount it was charged. Deactivating a plan stops new purchases but never touches members who already hold it. Duplicate `code` → 409. The 180-day visibility boost is derived from the duration, not edited. |
+| `GET\|POST /admin/communities`, `PATCH /admin/communities/{communityId}` | `communities.manage` | Pick-list management (`name` 2–80, `religionId`). Duplicate (case-insensitive, per religion) → 409. "Retire" (`isActive:false`) hides a community from sign-up pick-lists and search filters and refuses it on new profile edits; existing profiles keep the value. |
+| `GET /admin/security-events` | `audit.view` | Unified feed of failed/successful logins (identifier masked), and security-relevant admin/member changes. Filters `type` (ALL, LOGIN_FAILED, LOGIN_SUCCEEDED, CHANGES), `actor`, `q`, `dateFrom`, `dateTo`, `page`, `pageSize` ≤ 50. |
+| `GET\|POST /admin/payments/reconcile` | `payments.review` | `GET` lists the last 5 `payment-reconcile` job runs; `POST` triggers the same job a scheduler runs (the job runner's advisory lock turns a concurrent click into a no-op; rate-limited 6/min; audited as `payments.reconcile_requested` with the actor). It re-reads stale pending payments/refunds from the gateway and never closes one the gateway could not be asked about. |
+| `GET /admin/users` (extended) | `users.view` | New filters `verificationStatus`, `membership` (ACTIVE\|NONE), `openReports=true`, `sort` = `newest`\|`oldest`\|`name`\|`lastActive`; `q` also matches the member-facing profile ID. Rows include the profile ID and `lastActiveAt`. |
+
+### 21.3 Member self-service settings
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET\|PATCH /users/me/privacy` | member | `{ profileVisibility: VISIBLE\|HIDDEN, photoVisibility: MEMBERS\|ACCEPTED_ONLY, showLastActive: boolean }` (strict; ≥ 1 field; 404 until the member has a profile). Audited with before/after. Does **not** bump `profiles.updated_at`. |
+| `GET\|PATCH /users/me/notification-preferences` | member | `{ EMAIL?, PUSH?, WHATSAPP? }` booleans (strict). Opt-outs apply to non-essential EMAIL/PUSH/WHATSAPP messages only. IN_APP notifications, payment confirmations, invoices and security/warning notices are never suppressed. |
+| `GET /users/me/sessions` | member | Live (unrevoked, unexpired) sessions of the caller only: `id`, `browserInfo`, `ipAddress`, `createdAt`, `lastUsedAt`, `expiresAt`, `current`, truncated `deviceId`. Token hashes are never returned. |
+| `DELETE /users/me/sessions/{sessionId}` | member | Sign out one other device immediately. Own current session → 409 (use logout). Another member's id is indistinguishable from a missing one (404). |
+| `DELETE /users/me/sessions` | member | Sign out every device except the current one (also revokes their push tokens). |
+
+### 21.4 Privacy enforcement (all member-facing read paths)
+
+| Setting | Search | Recommendations | `GET /profiles/{id}` | `GET /profiles/photos/{id}/file` | `POST /interactions/interests` |
+|---|---|---|---|---|---|
+| `profileVisibility = HIDDEN` | excluded | excluded | 404 for everyone except the owner, admins and **accepted** connections | same 404 | 404 unless already an accepted connection |
+| `photoVisibility = ACCEPTED_ONLY` | `photos: []`, `photosRestricted: true` | same | same | 404 unless owner / admin / accepted connection | – |
+| `showLastActive = false` | `lastActive: null` | same | same | – | – |
+
+`lastActive` is a coarse label (`Active today` / `this week` / `this month` / `a while ago`), never a timestamp. `users.last_active_at` is now written (throttled to once per 5 minutes) on authenticated member requests — before B18 the column existed but was never populated.
+
+## 22. B19 — Super Admin controls, content, groups, live chat (addendum)
+
+All responses use the usual `{success,data,message}` envelope. Admin routes need an admin session; **SUPER** = Super Admin role only. Member routes need a member session. Every admin change below is audited (actor, time, previous/new value where relevant).
+
+### 22.1 Site controls and public status
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET\|PATCH /admin/site-controls` | SUPER (+`platform.settings.manage`) | Body (strict, ≥ 1 block): `maintenance: { enabled?, message? }`, `approval: { manualApproval? }`, `digest: { enabled? }`, `reason?`. Turning maintenance **on** needs a `reason` ≥ 5 chars. `GET` returns the three blocks with `updatedAt`, and `digest.mailerConfigured`. |
+| `GET /site-status` | public | `{ maintenance, message, signupOpen }` — nothing else. Used by the site banner. |
+| `GET\|PATCH /admin/security-settings` | SUPER (+`platform.settings.manage`) | `{ mfaRequired }`. Switching **on** is refused with 409 unless e-mailed codes can be delivered right now (OTP enabled and SMTP configured). `GET` also returns `emailDeliveryReady`. |
+
+Maintenance mode answers every member/visitor request with **503** and `details.maintenance = true`. Exempt: `/admin/*`, `/webhooks/*`, `/internal/*`, `/health`, `/site-status`. A missing or unreadable setting means *not* in maintenance.
+
+### 22.2 Admin MFA (e-mailed code)
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `POST /admin/login` (changed) | public | When MFA is on and the password is right, returns `{ mfaRequired: true, sentTo (masked), channel: "EMAIL", expiresInSeconds, resendAvailableAt }` and **no session**. |
+| `POST /admin/login/verify-mfa` | public | `{ email, code }` → the normal admin login result (session cookie set by the BFF). Failed codes are counted like failed passwords. |
+
+Break-glass if e-mail ever stops working: `npm run admin:disable-mfa` (server access required; audited as SYSTEM).
+
+### 22.3 Manual profile approval (Visibility Queue)
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /admin/profile-approvals?status=PENDING\|APPROVED\|REJECTED&page&pageSize` | `profiles.approve` | Queue with display name, profile id, completion, submitted time. |
+| `POST /admin/profile-approvals/{profileId}` | `profiles.approve` | `{ decision: "APPROVE"\|"REJECT", reason? }` — reject needs a reason ≥ 5 chars. A repeat decision → 409. |
+
+With the switch on, a profile that becomes complete for the first time waits as `PENDING` and is invisible to other members (search, recommendations, direct view, photos, new interests) until approved. Already-visible profiles are grandfathered. A rejected profile that is edited and complete again goes back to `PENDING`. The owner view (`GET /profiles/me`) gains `approvalStatus` and `approvalReason`.
+
+### 22.4 Support contact, contact form, success stories
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /support-contact`, `GET /success-stories` | public | Admin-entered contact details; published stories only. |
+| `POST /contact` | public | `{ name, email, topic, subject, message, website }` — `website` is a honeypot (non-empty → silently accepted and dropped). Limits: 5/hour per IP, 3/hour per e-mail. The IP is stored only as a keyed hash. |
+| `GET\|PATCH /admin/support-contact` | `support.manage` | `{ email, phone, hours }`. |
+| `GET /admin/contact-messages`, `PATCH /admin/contact-messages/{messageId}` | `support.manage` | Inbox (`status` NEW/READ/RESOLVED filter) and `{ status?, adminNote? }`. |
+| `GET\|POST /admin/success-stories`, `PATCH\|DELETE /admin/success-stories/{storyId}` | `content.manage` | Publishing needs `consentConfirmed: true` (else 409). No story is ever seeded. |
+
+### 22.5 Dashboard and security events
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /admin/dashboard/trends?days=7..90` | `users.view` | Daily sign-ups, payments, revenue (per currency) in the Asia/Kolkata calendar, zero-filled. |
+| `GET /admin/security-events/export` | `audit.view` | `text/csv`, same filters as the list, max 5 000 rows, formula-injection safe, audited as `security_events.exported`. |
+
+### 22.6 Member: change e-mail / mobile
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `POST /users/me/contact-change/request` | member | `{ type: "EMAIL"\|"MOBILE", newValue, countryCode?, password }`. Needs the current password; refuses a taken/identical/malformed value; sends a code to the **new** contact. 5/hour. |
+| `POST /users/me/contact-change/confirm` | member | `{ type, newValue, code }`. Updates the account, marks it verified, signs out **other** sessions, writes a masked audit entry, notifies in-app (and by e-mail to the old address when SMTP is configured). 10/hour. |
+
+### 22.7 Live chat (SSE) and weekly digest
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /chats/{chatId}/stream` | member, participant | `text/event-stream`. Events: `ready`, `message` (same shape as the paged API; `id` = message id), `reconnect` (server closes after ~55 s; the browser reconnects with `Last-Event-ID`). `: keep-alive` comments every 15 s. 4 open streams per member; non-participant → 403; 30 connects/min. **This is Server-Sent Events, not a WebSocket.** The web client keeps its 10-second poll as a fallback. |
+| `PATCH /users/me/notification-preferences` (changed) | member | Adds `DIGEST` (boolean, **off by default**). |
+
+The `member-digest` job (`npm run job -- member-digest`, suggested weekly) e-mails opted-in members one summary per ISO week: pending interests, matches in the last 7 days, unread messages. Counts and a dashboard link only. Skipped when the admin master switch is off, SMTP is not configured, the member turned the E-mail channel off, or there is nothing to report.
+
+### 22.8 Community groups
+
+Member routes (`ACTIVE` account; joining and posting also need a complete, approved profile):
+
+| Method & path | Purpose |
+|---|---|
+| `GET /groups` | Active groups with `memberCount`, `joined`, `removed`. |
+| `GET /groups/{groupId}` | One group. |
+| `POST /groups/{groupId}/join`, `POST /groups/{groupId}/leave` | Idempotent. A member an admin removed gets 403 on join. |
+| `GET\|POST /groups/{groupId}/posts` | Members only (else 403). `POST { body }` 1–1000 chars (10/min, 100/day). Authors appear as "First L."; your own as "You"; posts by members you blocked (or who blocked you) are hidden from you. |
+| `DELETE /group-posts/{postId}` | Author only; anything else → 404. |
+| `POST /group-posts/{postId}/report` | `{ reason }` 3–300 chars; once per reporter; own post → 400; non-member → 404. |
+
+Admin routes (`groups.manage`, delegable):
+
+| Method & path | Purpose |
+|---|---|
+| `GET\|POST /admin/groups`, `PATCH /admin/groups/{groupId}` | List with member/post/open-report counts; create; rename/describe/deactivate. Duplicate name → 409. |
+| `GET /admin/groups/{groupId}/posts?filter=all\|reported\|hidden` | Posts with author name and report count. |
+| `PATCH /admin/group-posts/{postId}` | `{ hidden, reason? }` — hiding needs a reason ≥ 5 chars; the author is notified; reversible. |
+| `GET /admin/groups/{groupId}/members`, `PATCH /admin/groups/{groupId}/members/{userId}` | `{ removed, reason? }` — removal needs a reason; blocks rejoining until restored. |
+
+### 22.9 Renewal follow-up (reminders only)
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /admin/renewals` | `payments.review` | Counts of follow-up cycles by state (`LAPSED`, `FOLLOW_UP_SENT`, `RENEWED`, `CLOSED`) and the 20 most recent, plus a note that nothing is charged automatically. |
+
+Job `membership-dunning` (hourly suggested): `LAPSED` → one reminder after 3 days → `CLOSED` after 10 days, or `RENEWED` when the member buys a newer active membership. Cycles are created by `membership-renewal-failed` for lapsed memberships that had the auto-renew preference on. **No payment is ever created.**

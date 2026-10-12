@@ -208,7 +208,11 @@ describe("B13 load/latency measurement", () => {
     expect(stats.p95).toBeLessThan(2000);
   });
 
-  it("[perf-load-login] POST /auth/login", async () => {
+  // 20 logins in waves of 5. Each wave is dominated by bcryptjs cost-12
+  // (intentional; see auth.service login). Isolated P95 is ~2.7s, so four
+  // waves already need ~11s of wall time before suite CPU contention.
+  // Keep the P95 assertion; only the Vitest wall budget is wider.
+  it("[perf-load-login] POST /auth/login", { timeout: 45_000 }, async () => {
     // login is rate-limited at 10/60s per IP (auth.controller.ts) — a
     // deliberate production safety feature, already covered by its own
     // dedicated tests (tests/auth-login.test.ts / tests/rbac.test.ts).

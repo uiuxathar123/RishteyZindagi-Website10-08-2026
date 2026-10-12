@@ -1,4 +1,4 @@
-# RishteyZindagi — Final Handover (Production Completion Phase)
+# RishteyZindagi — Final Handover (Production Completion Phase + B18)
 
 One Next.js 14 application: public website, member dashboard, admin panel and REST backend (`/api/v1`), on PostgreSQL 16 with Drizzle. This document is the single entry point for whoever takes the system over. The previous (B16) handover is archived at `docs/B16_FINAL_HANDOVER_ARCHIVE.md`.
 
@@ -8,14 +8,15 @@ One Next.js 14 application: public website, member dashboard, admin panel and RE
 
 | Fact | Value |
 |---|---|
-| API routes | 120 (24 added by this phase) |
-| UI pages | 43 |
-| Migrations / tables | 12 / 57 (`0011_pcp_production_completion.sql` is additive) |
-| Test files / tests | 66 / 646 |
+| API routes | 133 (24 added by the production completion phase, 13 by B18) |
+| UI pages | 46 |
+| Migrations / tables | 13 / 58 (`0011_pcp_production_completion.sql` and `0012_b18_admin_controls.sql` are additive) |
+| Test files / tests | 75 / 716 |
 | Frozen | B1–B15, B16a, B16b (see `PCP_KNOWN_LIMITATIONS.md` for the few frozen files that were edited, each for a documented defect or required integration point) |
 
 ## 2. Read in this order
 
+0. B18 (latest phase): `B18_FINAL_REPORT.md`, `B18_RELEASE_READINESS_MATRIX.md`, `B18_KNOWN_LIMITATIONS.md`, `B18_PERMISSION_MATRIX.md`, `B18_AUDIT.md`.
 1. `PCP_RELEASE_READINESS_MATRIX.md` — what is VERIFIED / REQUIRES EXTERNAL CREDENTIALS / LOCAL ONLY.
 2. `PCP_KNOWN_LIMITATIONS.md` — every open P2/P3 item and every frozen-file edit.
 3. `LOCAL_SETUP.md` — run it on your machine.
@@ -49,13 +50,17 @@ Secrets (gateway credentials, SMTP/Fast2SMS keys, S3 keys, `AUTH_SECRET`) exist 
 | Account deletions queue | Account deletions | `/admin/account-deletions` | `users.view` |
 | Staff and roles | Super Admin → Staff & Roles | `/admin/staff*`, `/admin/roles*` | `staff.manage` (role creation/permission edits: Super Admin only) |
 | Own password | Forced "choose a new password" screen after a temporary password (no voluntary change screen yet; the API accepts it any time) | `/admin/me/password` | any admin |
-| Membership plans | **none** (SQL only, P2-3) | – | – |
+| Membership plans | Super Admin → Membership Plans (B18) | `/admin/membership-plans*` | `plans.manage` |
+| Communities pick-list | Super Admin → Communities (B18) | `/admin/communities*` | `communities.manage` |
+| OTP policy (required / not required for new-device login and sign-up) | Super Admin → Platform Settings → *OTP policy* | `/admin/otp/policy` | Super Admin only |
+| Search page size, advanced-search enforcement, sign-up open/closed | Super Admin → Platform Settings | `/admin/platform-settings` | `platform.settings.manage` |
+| Security events feed, run reconciliation now | Super Admin → Security Events / Revenue | `/admin/security-events`, `/admin/payments/reconcile` | `audit.view`, `payments.review` |
 
 ## 5. Day-one checklist for the owner
 
 1. Create the production environment from `.env.example`; run `npm run check:prod-env` until it reports no errors.
 2. `npm ci && npm run build && npm run db:migrate && npm run db:seed && npm run admin:create-super -- --email … --name …`.
-3. Set real membership plan prices by SQL (the seed's prices are placeholders; re-seeding resets them).
+3. Set real membership plan prices in Admin → Super Admin → Membership Plans (the seed's prices are placeholders; re-seeding no longer overwrites your edits).
 4. Put the app behind HTTPS and a reverse proxy; set `TRUST_PROXY_HOPS`.
 5. Save Razorpay and/or PhonePe **test** credentials in Platform Settings → Payment gateway, press *Test connection*, point the vendor webhooks at the URLs shown there, make one test purchase, one refund. Then switch to live credentials.
 6. Choose the OTP provider in Platform Settings; confirm a signup code arrives by e-mail or SMS.
@@ -68,18 +73,19 @@ Secrets (gateway credentials, SMTP/Fast2SMS keys, S3 keys, `AUTH_SECRET`) exist 
 | Check | Result |
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
-| `npm test` (real PostgreSQL) | **66 files / 646 tests passed, 0 failed** |
-| `npm run build` | compiled successfully; 120 API routes, 43 pages |
+| `npm test` (real PostgreSQL) | **75 files / 716 tests passed, 0 failed** |
+| `npm run build` | compiled successfully; 133 API routes, 46 pages |
 | `npm run smoke:prod` (production build, fresh empty database, all migrations, seed, mock SMTP over STARTTLS) | **123/123** |
 | `npm run smoke:gateway` (mock Razorpay, PhonePe, Fast2SMS, SMTP) | **52/52** |
 | `npm run smoke:ui` / `smoke:ui-gateway` (Chromium) | **42/42** / **35/35** |
+| `npm run smoke:b18` (HTTP, both OTP configurations) / `smoke:b18-ui` (Chromium: member, Super Admin, Staff Admin) | **114/114** / **42/42** |
 | Clean export (unzip → `npm ci` → `tsc` → build → smoke) | see `EXPORT_VERIFICATION.txt` delivered beside the zip |
 
 All of the above used local mocks for third parties. Nothing was verified against a real vendor.
 
 ## 7. What was not done, and why
 
-See `PCP_KNOWN_LIMITATIONS.md`. In short: no real vendor call (no credentials), no admin MFA, CSP still allows inline scripts, no plan editor, auto-renew cannot charge a card, chat messages are retained after account anonymisation, controller-level rate limits are per-process (the shared policy limiter is exact), and the Razorpay popup / PhonePe hosted page were never rendered.
+See `B18_KNOWN_LIMITATIONS.md` and `PCP_KNOWN_LIMITATIONS.md`. In short: no real vendor call (no credentials), no admin MFA, CSP still allows inline scripts, auto-renew cannot charge a card, chat messages are retained after account anonymisation, controller-level rate limits are per-process (the shared policy limiter is exact), and the Razorpay popup / PhonePe hosted page were never rendered.
 
 ## 8. Security rules kept throughout
 

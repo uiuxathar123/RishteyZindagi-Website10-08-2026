@@ -2,6 +2,8 @@
 
 import { Crown } from "lucide-react";
 import { NotAvailable, PageHeader } from "./AdminUi";
+import { AdminSecurityPanel, SiteControlsPanel } from "./SiteControlsPanel";
+import { SearchSignupSettingsPanel } from "./SearchSignupSettingsPanel";
 import { OtpProviderPanel } from "./OtpProviderPanel";
 import { OtpPolicyPanel } from "./OtpPolicyPanel";
 import { PaymentProviderPanel } from "./PaymentProviderPanel";
@@ -14,15 +16,18 @@ export function PlatformSettingsClient() {
       <PageHeader
         title="Platform Settings"
         icon={<Crown className="h-5 w-5 text-rz-gold-rich" strokeWidth={1.8} />}
-        description="OTP delivery and policy, match scoring and payment gateways for the whole platform — Super Admin only."
+        description="OTP delivery and policy, match scoring, payment gateway, search and sign-up for the whole platform — Super Admin only."
       />
       <OtpProviderPanel />
       <OtpPolicyPanel />
       <OtpConfigPanel />
       <MatchingWeightsPanel />
       <PaymentProviderPanel />
-      <NotAvailable title="Feature flags">
-        The platform has no feature-flag store, so there are no flag switches here.
+      <SearchSignupSettingsPanel />
+      <SiteControlsPanel />
+      <AdminSecurityPanel />
+      <NotAvailable title="Not available">
+        Per-feature flags have no backend storage, so there are no switches for them here rather than controls that would not save.
       </NotAvailable>
     </div>
   );

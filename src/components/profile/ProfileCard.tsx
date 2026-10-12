@@ -127,6 +127,11 @@ function MemberCard({ profile }: { profile: CardProfile }) {
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 45vw, 90vw"
             className="transition-transform duration-300 group-hover:scale-[1.03]"
           />
+          {profile.photosRestricted && (
+            <span className="absolute inset-x-0 bottom-0 bg-rz-navy/75 px-3 py-1.5 text-center text-[11px] font-medium text-white">
+              Photos shared with accepted connections only
+            </span>
+          )}
         </Link>
         {profile.score !== undefined && (
           <div className="absolute right-3 top-3">
@@ -168,6 +173,12 @@ function MemberCard({ profile }: { profile: CardProfile }) {
         <h3 className="mb-1 font-serif text-lg font-semibold text-rz-navy">
           {profile.displayName}, {profile.age}
         </h3>
+        {profile.publicId && (
+          <p className="mb-1 text-[11px] font-medium tracking-wide text-rz-muted" data-testid="profile-public-id">
+            ID {profile.publicId}
+            {profile.lastActive ? ` · ${profile.lastActive}` : ""}
+          </p>
+        )}
         {locationLine(profile) && (
           <p className="mb-2 flex items-center gap-1 text-xs text-rz-muted">
             <MapPin className="h-3.5 w-3.5 shrink-0" />

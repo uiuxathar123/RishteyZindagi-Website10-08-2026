@@ -1,12 +1,14 @@
 "use client";
 
+import { Lock } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { FieldLabel, Select } from "@/components/ui/Input";
+import { FieldLabel, Input, Select } from "@/components/ui/Input";
 import { LookupSelect } from "@/components/forms/LookupSelect";
 import { groupCommunities, useReference } from "@/lib/api/lookups";
 import { formatHeight } from "@/lib/format";
-import { DEFAULT_FILTERS, type SearchFilters } from "./searchFilters";
+import { DEFAULT_FILTERS, PROFILE_ID_PATTERN, withoutAdvanced, type SearchFilters } from "./searchFilters";
 
 const AGES = Array.from({ length: 53 }, (_, i) => 18 + i); // 18..70
 const HEIGHTS = Array.from({ length: 13 }, (_, i) => 140 + i * 5); // 140..200 cm
@@ -17,17 +19,37 @@ const HEIGHTS = Array.from({ length: 13 }, (_, i) => 140 + i * 5); // 140..200 c
  * reference data (religion, community within a religion, country, city
  * within a country, mother tongue, education, profession, marital status).
  */
+export interface AdvancedAccess {
+  /** True when the signed-in member's plan includes advanced search (or the rule is switched off). */
+  allowed: boolean;
+  /** Visitor (not signed in) vs. a member whose plan lacks it — decides the link text. */
+  audience: "visitor" | "member";
+  loginHref: string;
+}
+
+function AdvancedBadge({ access }: { access: AdvancedAccess }) {
+  if (access.allowed) return <span className="ml-2 rounded-full bg-rz-champagne px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rz-maroon">Advanced</span>;
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-rz-border/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rz-muted">
+      <Lock className="h-3 w-3" aria-hidden /> Advanced
+    </span>
+  );
+}
+
 export function FilterPanel({
   value,
   onApply,
   onReset,
   idPrefix = "f",
+  access = { allowed: true, audience: "member", loginHref: "/login" },
 }: {
   value: SearchFilters;
   onApply: (next: SearchFilters) => void;
   onReset: () => void;
   idPrefix?: string;
+  access?: AdvancedAccess;
 }) {
+  const locked = !access.allowed;
   const [draft, setDraft] = useState<SearchFilters>(value);
   const [problem, setProblem] = useState<string | null>(null);
   const urlKey = JSON.stringify(value);
@@ -52,8 +74,13 @@ export function FilterPanel({
       setProblem("The minimum height can't be higher than the maximum height.");
       return;
     }
+    const pid = draft.profileId?.trim().toUpperCase();
+    if (pid && !PROFILE_ID_PATTERN.test(pid)) {
+      setProblem("A profile ID looks like RZ12345678 — the letters RZ followed by 8 digits.");
+      return;
+    }
     setProblem(null);
-    onApply({ ...draft, page: 1 });
+    onApply({ ...(locked ? withoutAdvanced(draft) : { ...draft, profileId: pid || undefined }), page: 1 });
   }
 
   return (
@@ -66,6 +93,37 @@ export function FilterPanel({
           <option value="MALE">Groom</option>
         </Select>
       </div>
+
+      <div>
+        <FieldLabel htmlFor={id("profile-id")}>
+          Profile ID <AdvancedBadge access={access} />
+        </FieldLabel>
+        <Input
+          id={id("profile-id")}
+          placeholder="RZ12345678"
+          maxLength={10}
+          autoComplete="off"
+          disabled={locked}
+          value={draft.profileId ?? ""}
+          onChange={(e) => set({ profileId: e.target.value.toUpperCase() || undefined })}
+        />
+      </div>
+
+      {locked && (
+        <p className="rounded-md border border-rz-border bg-rz-cream px-3 py-2 text-xs text-rz-muted" data-testid="advanced-locked-note">
+          {access.audience === "visitor" ? (
+            <>
+              Height, education, profession and profile ID filters are for members with a plan that includes advanced search.{" "}
+              <Link href={access.loginHref} className="rz-focus font-semibold text-rz-maroon underline underline-offset-2">Log in</Link>
+            </>
+          ) : (
+            <>
+              Your current plan doesn&apos;t include advanced search.{" "}
+              <Link href="/membership" className="rz-focus font-semibold text-rz-maroon underline underline-offset-2">See plans</Link>
+            </>
+          )}
+        </p>
+      )}
 
       <div>
         <FieldLabel>Age Range</FieldLabel>
@@ -91,9 +149,11 @@ export function FilterPanel({
       </div>
 
       <div>
-        <FieldLabel>Height</FieldLabel>
+        <FieldLabel>
+          Height <AdvancedBadge access={access} />
+        </FieldLabel>
         <div className="flex items-center gap-2">
-          <Select value={draft.minHeightCm ?? ""} onChange={(e) => set({ minHeightCm: e.target.value ? Number(e.target.value) : undefined })} aria-label="Minimum height">
+          <Select value={draft.minHeightCm ?? ""} onChange={(e) => set({ minHeightCm: e.target.value ? Number(e.target.value) : undefined })} aria-label="Minimum height" disabled={locked}>
             <option value="">Min</option>
             {HEIGHTS.map((h) => (
               <option key={h} value={h}>
@@ -102,7 +162,7 @@ export function FilterPanel({
             ))}
           </Select>
           <span className="text-rz-muted">–</span>
-          <Select value={draft.maxHeightCm ?? ""} onChange={(e) => set({ maxHeightCm: e.target.value ? Number(e.target.value) : undefined })} aria-label="Maximum height">
+          <Select value={draft.maxHeightCm ?? ""} onChange={(e) => set({ maxHeightCm: e.target.value ? Number(e.target.value) : undefined })} aria-label="Maximum height" disabled={locked}>
             <option value="">Max</option>
             {HEIGHTS.map((h) => (
               <option key={h} value={h}>
@@ -143,13 +203,17 @@ export function FilterPanel({
       </div>
 
       <div>
-        <FieldLabel htmlFor={id("education")}>Education</FieldLabel>
-        <LookupSelect id={id("education")} value={draft.educationId ?? ""} onChange={(v) => set({ educationId: v || undefined })} options={ref.data?.educations} placeholder="Any" loading={loading && !ref.data} />
+        <FieldLabel htmlFor={id("education")}>
+          Education <AdvancedBadge access={access} />
+        </FieldLabel>
+        <LookupSelect id={id("education")} disabled={locked} value={draft.educationId ?? ""} onChange={(v) => set({ educationId: v || undefined })} options={ref.data?.educations} placeholder="Any" loading={loading && !ref.data} />
       </div>
 
       <div>
-        <FieldLabel htmlFor={id("profession")}>Profession</FieldLabel>
-        <LookupSelect id={id("profession")} value={draft.professionId ?? ""} onChange={(v) => set({ professionId: v || undefined })} options={ref.data?.professions} placeholder="Any" loading={loading && !ref.data} />
+        <FieldLabel htmlFor={id("profession")}>
+          Profession <AdvancedBadge access={access} />
+        </FieldLabel>
+        <LookupSelect id={id("profession")} disabled={locked} value={draft.professionId ?? ""} onChange={(v) => set({ professionId: v || undefined })} options={ref.data?.professions} placeholder="Any" loading={loading && !ref.data} />
       </div>
 
       <div>

@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import * as otpService from "@/server/modules/otp/otp.service";
 import { db } from "@/server/db/client";
-import { otpConfigs } from "@/server/db/schema";
+import { otpConfigs, otps } from "@/server/db/schema";
 import { getDevOtpCode, __clearDevOtpStoreForTests } from "@/server/modules/otp/providers/dev.provider";
 import { resetTransactionalTables, resetOtpConfigForTests } from "./helpers/reset-db";
 
@@ -45,6 +45,17 @@ describe("otp.service core", () => {
     });
   });
 
+  it("only one concurrent verification can consume the same OTP", async () => {
+    await otpService.requestOtp({ identifier: "core-race@example.com", purpose: "LOGIN", meta });
+    const code = getDevOtpCode("core-race@example.com", "LOGIN")!;
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, () => otpService.verifyOtpDirect("core-race@example.com", "LOGIN", code))
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(7);
+  });
+
   it("a ticket is single-use — consuming it twice fails the second time", async () => {
     await otpService.requestOtp({ identifier: "core-3@example.com", purpose: "SIGNUP", meta });
     const code = getDevOtpCode("core-3@example.com", "SIGNUP")!;
@@ -54,6 +65,20 @@ describe("otp.service core", () => {
     await expect(otpService.consumeTicket("core-3@example.com", "SIGNUP", verified.ticket)).rejects.toMatchObject({
       code: "AUTHENTICATION_ERROR",
     });
+  });
+
+  it("only one concurrent request can consume the same verification ticket", async () => {
+    await otpService.requestOtp({ identifier: "core-ticket-race@example.com", purpose: "SIGNUP", meta });
+    const code = getDevOtpCode("core-ticket-race@example.com", "SIGNUP")!;
+    const verified = await otpService.verifyOtpAndIssueTicket("core-ticket-race@example.com", "SIGNUP", code);
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, () =>
+        otpService.consumeTicket("core-ticket-race@example.com", "SIGNUP", verified.ticket)
+      )
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(7);
   });
 
   it("purposes are fully isolated — a code issued for one purpose never verifies another", async () => {
@@ -91,6 +116,27 @@ describe("otp.service core", () => {
     await expect(otpService.verifyOtpDirect("core-6@example.com", "LOGIN", code)).rejects.toMatchObject({
       code: "AUTHENTICATION_ERROR",
     });
+  });
+
+  it("enforces the OTP attempt cap across concurrent wrong-code requests", async () => {
+    await db.update(otpConfigs).set({ maxVerifyAttempts: 3 }).where(eq(otpConfigs.id, 1));
+    await otpService.requestOtp({ identifier: "core-attempt-race@example.com", purpose: "LOGIN", meta });
+    const code = getDevOtpCode("core-attempt-race@example.com", "LOGIN")!;
+    const wrongCode = code === "999999" ? "888888" : "999999";
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 12 }, () =>
+        otpService.verifyOtpDirect("core-attempt-race@example.com", "LOGIN", wrongCode)
+      )
+    );
+    expect(results.every((result) => result.status === "rejected")).toBe(true);
+
+    const [row] = await db.select().from(otps).where(eq(otps.identifier, "core-attempt-race@example.com"));
+    expect(row.attempts).toBe(3);
+    expect(row.invalidatedAt).not.toBeNull();
+    await expect(
+      otpService.verifyOtpDirect("core-attempt-race@example.com", "LOGIN", code)
+    ).rejects.toMatchObject({ code: "AUTHENTICATION_ERROR" });
   });
 
   it("enforces the resend cooldown between requests for the same identifier+purpose", async () => {

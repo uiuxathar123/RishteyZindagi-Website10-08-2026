@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { Container } from "@/components/ui/Container";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -22,6 +23,12 @@ export default function LoginPage() {
         <Suspense fallback={<Skeleton className="h-80 w-full rounded-xl" />}>
           <LoginForm />
         </Suspense>
+        <p className="mt-6 text-center text-xs text-rz-muted">
+          Asked to delete your account?{" "}
+          <Link href="/recover-account" className="rz-focus font-semibold text-rz-maroon">
+            Recover it
+          </Link>
+        </p>
       </div>
     </Container>
   );

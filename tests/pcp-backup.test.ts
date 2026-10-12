@@ -12,6 +12,7 @@ import fs from "fs";
 import os from "os";
 import net from "net";
 import path from "path";
+import { runTsxSync } from "./helpers/run-tsx";
 
 const ROOT = path.resolve(__dirname, "..");
 const DB_URL = process.env.DATABASE_URL as string;
@@ -243,7 +244,7 @@ describe.skipIf(!hasMoto || !hasTools)("off-box S3-compatible destination (moto)
   });
 
   const tsx = (args: string[], env: Record<string, string>) => {
-    const r = spawnSync("npx", ["--no-install", "tsx", "scripts/backup-offsite.ts", ...args], {
+    const r = runTsxSync(["scripts/backup-offsite.ts", ...args], {
       cwd: ROOT,
       encoding: "utf8",
       env: { PATH: process.env.PATH as string, HOME: process.env.HOME as string, ...env } as unknown as NodeJS.ProcessEnv,

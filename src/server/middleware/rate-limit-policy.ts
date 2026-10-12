@@ -72,7 +72,7 @@ export const RATE_LIMIT_RULES: readonly Rule[] = [
   { name: "chat-write", methods: WRITE, pattern: /^\/chats\/.*$/, ipLimit: 300, subjectLimit: 120, windowMs: MIN },
   { name: "reports", methods: ["POST"], pattern: /^\/reports$/, ipLimit: 30, subjectLimit: 10, windowMs: MIN },
   // --- reading other people's data (scraping) -----------------------------
-  { name: "profile-read", methods: READ, pattern: /^\/(profiles\/(?!me)[^/]+|search\/profiles|profiles\/me\/recommendations)$/, ipLimit: 240, subjectLimit: 120, windowMs: MIN },
+  { name: "profile-read", methods: READ, pattern: /^\/(profiles\/(?!me)[^/]+|search\/(?:profiles|access)|profiles\/me\/recommendations)$/, ipLimit: 240, subjectLimit: 120, windowMs: MIN },
   // --- admin plane --------------------------------------------------------
   { name: "admin-write", methods: WRITE, pattern: /^\/admin\/.*$/, ipLimit: 240, subjectLimit: 90, windowMs: MIN },
   { name: "admin-read", methods: READ, pattern: /^\/admin\/.*$/, ipLimit: 600, subjectLimit: 300, windowMs: MIN },

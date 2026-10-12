@@ -23,6 +23,7 @@ import * as auditRepo from "./audit-logs.repository";
 import * as membershipsRepo from "@/server/modules/memberships/memberships.repository";
 import * as warningsRepo from "@/server/modules/warnings/warnings.repository";
 import * as reportsRepo from "@/server/modules/reports/reports.repository";
+import * as profilesRepo from "@/server/modules/profiles/profiles.repository";
 import { toSummaryView, toDetailView } from "./users-admin.dto";
 import type { AdminUserSummaryView } from "./users-admin.dto";
 
@@ -34,6 +35,9 @@ export interface SearchUsersInput {
   q?: string;
   status?: UserRow["status"];
   verificationStatus?: ProfileRow["verificationStatus"];
+  membership?: "ACTIVE" | "NONE";
+  openReports?: boolean;
+  sort?: "newest" | "oldest" | "name" | "lastActive";
   page?: number;
   pageSize?: number;
 }
@@ -52,13 +56,21 @@ export async function searchUsersForAdmin(ctx: AuthContext, input: SearchUsersIn
   const pageSize = Math.min(input.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
   const { items, total } = await repo.searchUsers(
-    { q: input.q, status: input.status, verificationStatus: input.verificationStatus },
+    { q: input.q, status: input.status, verificationStatus: input.verificationStatus, membership: input.membership, openReports: input.openReports, sort: input.sort },
     page,
     pageSize
   );
 
+  // One query for the primary photos of this page (admins may always open photos).
+  const profileIds = items.map((r) => r.profile?.id).filter((x): x is string => !!x);
+  const photos = await profilesRepo.listPhotosForProfiles(profileIds);
+  const primaryPhotoId = (profileId: string | undefined): string | null => {
+    const list = profileId ? photos.get(profileId) : undefined;
+    return list ? (list.find((p) => p.isPrimary) ?? list[0])?.id ?? null : null;
+  };
+
   return {
-    items: items.map((row) => toSummaryView(row.user, row.profile)),
+    items: items.map((row) => toSummaryView(row.user, row.profile, primaryPhotoId(row.profile?.id))),
     page,
     pageSize,
     total,

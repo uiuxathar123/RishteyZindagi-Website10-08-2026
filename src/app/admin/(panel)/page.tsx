@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PermissionGate } from "@/components/admin/PermissionGate";
 import { OverviewClient } from "@/components/admin/OverviewClient";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AdminOverviewPage() {
-  return <OverviewClient />;
+  return (
+    <PermissionGate needs={["users.view"]} what="The overview">
+      <OverviewClient />
+    </PermissionGate>
+  );
 }

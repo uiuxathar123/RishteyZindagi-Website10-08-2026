@@ -14,6 +14,8 @@ Premium Indian + NRI matrimonial platform — **one Next.js 14 (App Router) + Ty
 | Audit before/after | `PRODUCTION_COMPLETION_AUDIT.md` |
 | Know how every screen maps to an API | `B16_AUDIT.md` |
 | Call the API | `API_REFERENCE.md` (the HTTP methods in the route files are the authority; see its B16 addendum) |
+| B18 additions (OTP policy, plans, communities, privacy, permissions) | `B18_FINAL_REPORT.md`, `B18_PERMISSION_MATRIX.md`, `B18_KNOWN_LIMITATIONS.md`, `API_REFERENCE.md` §21 |
+| B19 additions (site controls, admin MFA, manual approval, contact/stories, groups, live chat, digest) | `B19_FINAL_REPORT.md`, `B19_KNOWN_LIMITATIONS.md`, `B19_RELEASE_READINESS_MATRIX.md`, `API_REFERENCE.md` §22 |
 | Backend design, per phase | `BACKEND.md`, `docs/phase-status/` |
 | Deploy | **`DEPLOYMENT_PRODUCTION.md`**, `PRODUCTION_ENV_REFERENCE.md` |
 | Payments / OTP setup | `PAYMENT_SETUP.md`, `FAST2SMS_SETUP.md` |
@@ -53,10 +55,11 @@ Next.js 14.2 · React 18 · TypeScript 5 · Tailwind CSS · PostgreSQL 16 · Dri
 | Command | Purpose |
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js |
-| `npm run db:migrate` / `db:seed` | Migrations (12 → 57 tables) / reference data |
+| `npm run db:migrate` / `db:seed` | Migrations (19 → 66 tables) / reference data |
 | `npm run admin:create-super -- --email … --name …` | First Super Admin |
 | `npm run job -- <name>` | Scheduled jobs (`--list` shows them) |
-| `npm run smoke:prod` / `smoke:gateway` | Real-HTTP smoke tests against a production build |
+| `npm run smoke:prod` / `smoke:gateway` / `smoke:b18` | Real-HTTP smoke tests against a production build |
+| `npm run smoke:ui` / `smoke:ui-gateway` / `smoke:b18-ui` | Headless-browser checks (Playwright + Chromium needed) |
 | `npm test` | Vitest, 66 files, ~15–20 min on 2 cores, needs the migrated + seeded **test** DB |
 | `npx tsc --noEmit` | Type-check |
 | `npm run check:prod-env` | Production-readiness check of your env |
@@ -64,3 +67,8 @@ Next.js 14.2 · React 18 · TypeScript 5 · Tailwind CSS · PostgreSQL 16 · Dri
 ## Not verified live (nothing is faked)
 
 Razorpay, PhonePe, Fast2SMS, SMTP, WhatsApp Cloud API, FCM, S3-compatible storage and off-box backup are implemented and tested against protocol mocks only. They work the moment you supply real credentials and complete the go-live checklists in `PAYMENT_SETUP.md`, `FAST2SMS_SETUP.md` and `DEPLOYMENT_PRODUCTION.md`; until then they fail closed with an honest message. WebSocket chat does not exist (the chat screen polls). Auto-renewal cannot charge a card unattended. Full list: `PCP_KNOWN_LIMITATIONS.md`.
+
+
+**Provider setup (Razorpay test mode, SMTP e-mail OTP):** see `PROVIDER_TEST_SETUP.md`.
+
+**Git handover:** see `GIT_HANDOVER.md` (first commit, pre-commit secret scan: `npm run hooks:install`, `npm run scan:secrets`).

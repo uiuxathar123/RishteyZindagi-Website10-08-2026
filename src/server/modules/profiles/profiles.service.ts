@@ -26,11 +26,14 @@ import { recordEvent } from "@/server/modules/behaviour-events/behaviour-events.
 // by navigating straight to a profileId they already had (e.g. from
 // before the block, or from chat history). Reuses B6's own existing
 // `isBlockedEitherDirection` — no new query/logic invented.
-import { isBlockedEitherDirection } from "@/server/modules/interactions/interactions.repository";
+import { acceptedPartnerIds, isAcceptedPartner, viewerExtrasFor } from "./privacy";
+import { blockedUserIdsAmong, isBlockedEitherDirection } from "@/server/modules/interactions/interactions.repository";
 import { getStorageProvider } from "@/server/modules/storage/factory";
 import { inspectImage } from "@/server/modules/storage/image-inspect";
 import * as profilesRepo from "./profiles.repository";
-import type { ProfileRow, ProfilePhotoRow } from "./profiles.repository";
+import type { ProfileRow, ProfilePhotoRow, ProfileUpdate } from "./profiles.repository";
+import { getApprovalSettings } from "@/server/modules/platform-settings/platform-settings.service";
+import { notify } from "@/server/modules/notifications/notifications.service";
 import * as referenceRepo from "./reference.repository";
 import type { LookupRow } from "./reference.repository";
 import { computeCompletion } from "./completion";
@@ -146,12 +149,33 @@ async function recomputeProfileState(profileId: string): Promise<ProfileRow> {
   if (!profile) throw new NotFoundError("Profile not found.");
   const photoCount = await profilesRepo.countPhotos(profileId);
   const result = computeCompletion(profile, photoCount > 0);
-  return profilesRepo.update(profileId, {
+  // B19: the first time a profile becomes READY it is either auto-approved (switch off — the default) or put in the
+  // manual-approval queue (switch on). A profile that has already been decided is never re-queued.
+  let approval: Partial<ProfileUpdate> = {};
+  if (result.profileStatus === "READY_FOR_VISIBILITY" && !profile.approvalDecidedAt) {
+    const manual = (await getApprovalSettings()).manualApproval;
+    approval = manual ? { approvalStatus: "PENDING" } : { approvalStatus: "APPROVED", approvalDecidedAt: new Date() };
+  } else if (result.profileStatus === "READY_FOR_VISIBILITY" && profile.approvalStatus === "REJECTED") {
+    // A member who edits a rejected profile resubmits it: it goes back to the queue (never straight to visible).
+    approval = { approvalStatus: "PENDING" };
+  }
+  const updated = await profilesRepo.update(profileId, {
     profileCompletionPercent: result.profileCompletionPercent,
     missingRequiredFields: result.missingRequiredFields,
     hasProfilePhoto: result.hasProfilePhoto,
     profileStatus: result.profileStatus,
+    ...approval,
   });
+  if (approval.approvalStatus === "PENDING" && profile.approvalStatus !== "PENDING") {
+    await notify({
+      userId: profile.userId,
+      channel: "IN_APP",
+      title: "Your profile is under review",
+      body: "Thank you for completing your profile. It will appear to other members as soon as our team approves it.",
+      dedupeKey: `profile_pending:${profile.id}`,
+    });
+  }
+  return updated;
 }
 
 // --- GET current user's complete profile (owner view) -------------------
@@ -233,6 +257,10 @@ async function validateReferencedIds(input: UpdateProfileInput, current: Profile
     }
     if (!(await referenceRepo.communityBelongsToReligion(input.communityId, religionId))) {
       throw new ValidationError("communityId does not belong to the given religionId.");
+    }
+    // B18: a community an admin retired can't be newly picked (keeping the one already on the profile is fine).
+    if (input.communityId !== current.communityId && !(await referenceRepo.communityIsActive(input.communityId))) {
+      throw new ValidationError("This community is no longer available. Please choose another.");
     }
   }
 
@@ -513,7 +541,7 @@ export async function getPublicProfile(viewer: AuthContext | null, profileId: st
   const isReady = computeCompletion(found.profile, photoCount > 0).profileStatus === "READY_FOR_VISIBILITY";
 
   if (!isOwner && !isAdmin) {
-    if (found.userStatus !== "ACTIVE" || !isReady) {
+    if (found.userStatus !== "ACTIVE" || !isReady || found.profile.approvalStatus !== "APPROVED") {
       throw new NotFoundError("Profile not found.");
     }
     // B10: a blocked-either-direction pair gets the exact same 404 as
@@ -524,6 +552,12 @@ export async function getPublicProfile(viewer: AuthContext | null, profileId: st
     // a signed-in member viewer.
     if (viewer && viewer.subject.type === "user" && (await isBlockedEitherDirection(viewer.subject.id, found.profile.userId))) {
       throw new NotFoundError("Profile not found.");
+    }
+    // B18: "hide my profile" — same 404 as every other unavailable reason; only an existing
+    // ACCEPTED connection can still open it.
+    if (found.profile.profileVisibility === "HIDDEN") {
+      const partner = viewer && viewer.subject.type === "user" && (await isAcceptedPartner(viewer.subject.id, found.profile.userId));
+      if (!partner) throw new NotFoundError("Profile not found.");
     }
   }
 
@@ -551,7 +585,13 @@ export async function getPublicProfile(viewer: AuthContext | null, profileId: st
     await recordEvent({ actorUserId: viewer.subject.id, targetUserId: found.profile.userId, eventType: "PROFILE_VIEW" });
     return {
       audience: "authenticated",
-      profile: toAuthenticatedPublicView(found.profile, found.displayName, lookups, photos),
+      profile: toAuthenticatedPublicView(
+        found.profile,
+        found.displayName,
+        lookups,
+        photos,
+        viewer.subject.type === "user" ? (await viewerExtrasFor(viewer.subject.id, [found.profile])).get(found.profile.id) : undefined
+      ),
     };
   }
 
@@ -559,6 +599,79 @@ export async function getPublicProfile(viewer: AuthContext | null, profileId: st
     audience: "anonymous",
     profile: toAnonymousGatedView(found.profile, lookups, photoCount > 0),
   };
+}
+
+// --- Batched list-card summaries ----------------------------------------
+
+export const MAX_PROFILE_SUMMARY_IDS = 50;
+
+export type ProfileSummaryItem = { audience: "authenticated"; profile: AuthenticatedPublicProfileView };
+
+/** GET /profiles/summaries?ids=… — the card data for many profiles in a handful of queries, for
+ * interest / shortlist / match / chat lists. It applies EXACTLY the visibility rules of
+ * getPublicProfile for a signed-in member (account ACTIVE, profile READY and APPROVED, no block in
+ * either direction, HIDDEN profiles only for accepted partners, photos per the owner's setting) and
+ * answers `null` for every id that single route would answer 404 (or that is the caller's own
+ * profile) — never a reason. Unlike the single route it records NO PROFILE_VIEW event: rendering a
+ * list is not "viewing" every person on it. Member sessions only. */
+export async function getProfileSummaries(viewer: AuthContext, profileIds: string[]): Promise<Record<string, ProfileSummaryItem | null>> {
+  const viewerUserId = requireMemberSubject(viewer);
+  const ids = [...new Set(profileIds)];
+  if (ids.length > MAX_PROFILE_SUMMARY_IDS) {
+    throw new ValidationError(`At most ${MAX_PROFILE_SUMMARY_IDS} profiles can be requested at once.`);
+  }
+  const result: Record<string, ProfileSummaryItem | null> = Object.fromEntries(ids.map((id) => [id, null]));
+  if (ids.length === 0) return result;
+
+  const [found, photosByProfile] = await Promise.all([profilesRepo.findManyWithAccount(ids), profilesRepo.listPhotosForProfiles(ids)]);
+  const others = found.filter((f) => f.profile.userId !== viewerUserId);
+  const userIds = others.map((f) => f.profile.userId);
+
+  const [blocked, partners] = await Promise.all([blockedUserIdsAmong(viewerUserId, userIds), acceptedPartnerIds(viewerUserId, userIds)]);
+
+  const visible = others.filter((f) => {
+    const photos = photosByProfile.get(f.profile.id) ?? [];
+    const isReady = computeCompletion(f.profile, photos.length > 0).profileStatus === "READY_FOR_VISIBILITY";
+    if (f.userStatus !== "ACTIVE" || !isReady || f.profile.approvalStatus !== "APPROVED") return false;
+    if (blocked.has(f.profile.userId)) return false;
+    if (f.profile.profileVisibility === "HIDDEN" && !partners.has(f.profile.userId)) return false;
+    return true;
+  });
+  if (visible.length === 0) return result;
+
+  const need = (pick: (p: ProfileRow) => string | null) => [...new Set(visible.map((f) => pick(f.profile)).filter((x): x is string => !!x))];
+  const [maps, extras] = await Promise.all([
+    referenceRepo.getLookupMapsByIds({
+      maritalStatus: need((p) => p.maritalStatusId),
+      religion: need((p) => p.religionId),
+      community: need((p) => p.communityId),
+      motherTongue: need((p) => p.motherTongueId),
+      education: need((p) => p.educationId),
+      profession: need((p) => p.professionId),
+      country: need((p) => p.countryId),
+      city: need((p) => p.cityId),
+    }),
+    viewerExtrasFor(viewerUserId, visible.map((f) => f.profile)),
+  ]);
+
+  for (const f of visible) {
+    const p = f.profile;
+    const lookups: ResolvedLookups = {
+      maritalStatus: (p.maritalStatusId && maps.maritalStatus.get(p.maritalStatusId)) || null,
+      religion: (p.religionId && maps.religion.get(p.religionId)) || null,
+      community: (p.communityId && maps.community.get(p.communityId)) || null,
+      motherTongue: (p.motherTongueId && maps.motherTongue.get(p.motherTongueId)) || null,
+      education: (p.educationId && maps.education.get(p.educationId)) || null,
+      profession: (p.professionId && maps.profession.get(p.professionId)) || null,
+      country: (p.countryId && maps.country.get(p.countryId)) || null,
+      city: (p.cityId && maps.city.get(p.cityId)) || null,
+    };
+    result[p.id] = {
+      audience: "authenticated",
+      profile: toAuthenticatedPublicView(p, f.displayName, lookups, photosByProfile.get(p.id) ?? [], extras.get(p.id)),
+    };
+  }
+  return result;
 }
 
 // --- Photo file delivery (gated) ---------------------------------------
@@ -587,8 +700,13 @@ export async function authorizePhotoFileAccess(viewer: AuthContext | null, photo
   if (!isOwner && !isAdmin) {
     const photoCount = await profilesRepo.countPhotos(found.profile.id);
     const isReady = computeCompletion(found.profile, photoCount > 0).profileStatus === "READY_FOR_VISIBILITY";
-    if (found.userStatus !== "ACTIVE" || !isReady) {
+    if (found.userStatus !== "ACTIVE" || !isReady || found.profile.approvalStatus !== "APPROVED") {
       throw new NotFoundError("Photo not found.");
+    }
+    // B18: hidden profile / accepted-connections-only photos. Same 404 as any unavailable photo.
+    if (found.profile.profileVisibility === "HIDDEN" || found.profile.photoVisibility === "ACCEPTED_ONLY") {
+      const partner = viewer.subject.type === "user" && (await isAcceptedPartner(viewer.subject.id, found.profile.userId));
+      if (!partner) throw new NotFoundError("Photo not found.");
     }
   }
 

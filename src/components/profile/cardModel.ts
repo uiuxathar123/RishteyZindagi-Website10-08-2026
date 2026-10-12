@@ -16,6 +16,8 @@ import type {
 
 export interface CardProfile {
   profileId: string;
+  /** Member-facing ID (RZ + 8 digits) — only in the signed-in view. */
+  publicId?: string;
   /** Present only when the API showed us the full (signed-in) view. Needed for like / interest / shortlist / chat / block / report. */
   userId?: string;
   audience: "authenticated" | "anonymous";
@@ -40,6 +42,10 @@ export interface CardProfile {
   photos: Array<{ id: string; src: string; isPrimary: boolean }>;
   /** Anonymous view: a photo exists but the API withheld it. */
   photoWithheld?: boolean;
+  /** Signed-in view: the owner limited photos to accepted connections. */
+  photosRestricted?: boolean;
+  /** Coarse activity hint ("Active this week"), only when the owner allows it. */
+  lastActive?: string | null;
   /** Only when the API supplied a compatibility result. */
   score?: number;
   breakdown?: CompatibilityBreakdownRow[];
@@ -50,6 +56,7 @@ function fromMember(p: MemberProfile): CardProfile {
   const sorted = [...p.photos].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
   return {
     profileId: p.id,
+    publicId: p.profileId,
     userId: p.userId,
     audience: "authenticated",
     displayName: p.displayName,
@@ -69,6 +76,8 @@ function fromMember(p: MemberProfile): CardProfile {
     verified: p.verificationStatus === "VERIFIED",
     photoSrc: photoSrc(primaryPhotoUrl(p.photos)),
     photos: sorted.map((ph) => ({ id: ph.id, src: photoSrc(ph.url) as string, isPrimary: ph.isPrimary })),
+    photosRestricted: p.photosRestricted === true,
+    lastActive: p.lastActive ?? null,
   };
 }
 

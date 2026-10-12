@@ -3,6 +3,9 @@
 # Real-HTTP smoke test orchestrator (production-completion phase).
 #
 #   scripts/smoke/run-smoke.sh prod      # NODE_ENV=production server + mock SMTP        -> pcp-prod-smoke.ts
+#   scripts/smoke/run-smoke.sh b18       # B18: OTP required / not required, Super & Staff Admin, member settings (production server) -> b18-smoke.ts
+#   scripts/smoke/run-smoke.sh b19       # B19: maintenance, admin MFA, contact form, live chat stream (SSE) through the proxy, groups, digest job, e-mail change -> b19-smoke.ts
+#   scripts/smoke/run-smoke.sh b18-ui    # B18 browser check: Super Admin / Staff Admin / Member screens, OTP on and off (needs playwright)  -> b18-ui-check.ts
 #   scripts/smoke/run-smoke.sh ui        # same production server, drives Chromium over the new screens   -> pcp-ui-check.ts (needs playwright, see that file)
 #   scripts/smoke/run-smoke.sh ui-gateway # payment screens in Chromium with mock gateways + stubbed Razorpay popup -> pcp-ui-gateway-check.ts
 #   scripts/smoke/run-smoke.sh gateway   # same build, NODE_ENV=test, mock Razorpay,
@@ -17,7 +20,7 @@
 set -euo pipefail
 
 MODE="${1:-prod}"
-case "$MODE" in prod|gateway|ui|ui-gateway) ;; *) echo "usage: run-smoke.sh prod|gateway|ui|ui-gateway" >&2; exit 3;; esac
+case "$MODE" in prod|gateway|ui|ui-gateway|b18|b18-ui|b19) ;; *) echo "usage: run-smoke.sh prod|gateway|ui|ui-gateway|b18|b18-ui|b19" >&2; exit 3;; esac
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
@@ -62,10 +65,13 @@ export SMOKE_BASE_URL="http://localhost:$PORT"
 unset SEED_DEV_SUPER_ADMIN SEED_DEV_SUPER_ADMIN_EMAIL SEED_DEV_SUPER_ADMIN_PASSWORD
 unset EMAIL_API_KEY SMS_API_KEY WHATSAPP_API_KEY FAST2SMS_API_KEY FAST2SMS_OTP_ID RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET PHONEPE_CLIENT_ID PHONEPE_CLIENT_SECRET
 
-if [ "$MODE" = "prod" ] || [ "$MODE" = "ui" ]; then
+if [ "$MODE" = "prod" ] || [ "$MODE" = "ui" ] || [ "$MODE" = "b18" ] || [ "$MODE" = "b18-ui" ] || [ "$MODE" = "b19" ]; then
   export NODE_ENV=production
   SCRIPT=scripts/smoke/pcp-prod-smoke.ts
   [ "$MODE" = "ui" ] && SCRIPT=scripts/smoke/pcp-ui-check.ts
+  [ "$MODE" = "b18" ] && SCRIPT=scripts/smoke/b18-smoke.ts
+  [ "$MODE" = "b18-ui" ] && SCRIPT=scripts/smoke/b18-ui-check.ts
+  [ "$MODE" = "b19" ] && SCRIPT=scripts/smoke/b19-smoke.ts
 else
   export NODE_ENV=test               # production BUILD, but non-production guards so the mock gateway base URLs are honoured (the schema allows development|test|production)
   export RATE_LIMIT_POLICY=on        # the shared rate limiter is off under NODE_ENV=test unless asked for

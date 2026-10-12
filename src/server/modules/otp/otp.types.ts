@@ -15,7 +15,7 @@ export type OtpMethod = "SMS" | "WHATSAPP" | "EMAIL";
 /** Why an OTP was issued. Purposes are fully isolated from one another — an
  * OTP issued for one purpose can never be consumed to satisfy another, even
  * for the same identifier (enforced in otp.repository.ts's lookups). */
-export type OtpPurpose = "SIGNUP" | "LOGIN" | "FORGOT_PASSWORD" | "NEW_DEVICE" | "ACCOUNT_RECOVERY";
+export type OtpPurpose = "SIGNUP" | "LOGIN" | "FORGOT_PASSWORD" | "NEW_DEVICE" | "ACCOUNT_RECOVERY" | "ADMIN_MFA" | "CONTACT_CHANGE";
 
 export const OTP_METHODS: readonly OtpMethod[] = ["SMS", "WHATSAPP", "EMAIL"];
-export const OTP_PURPOSES: readonly OtpPurpose[] = ["SIGNUP", "LOGIN", "FORGOT_PASSWORD", "NEW_DEVICE", "ACCOUNT_RECOVERY"];
+export const OTP_PURPOSES: readonly OtpPurpose[] = ["SIGNUP", "LOGIN", "FORGOT_PASSWORD", "NEW_DEVICE", "ACCOUNT_RECOVERY", "ADMIN_MFA", "CONTACT_CHANGE"];

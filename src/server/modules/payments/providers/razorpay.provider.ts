@@ -60,6 +60,7 @@ async function requireCreds() {
   if (!creds) {
     throw new ServiceUnavailableError("Razorpay is not configured. Save the key id/secret in Admin → Payments, or set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.");
   }
+  if (creds.problem) throw new ServiceUnavailableError(creds.problem);
   return creds;
 }
 
@@ -140,6 +141,7 @@ export class RazorpayProvider implements PaymentGatewayProvider {
   async testConnection(): Promise<TestConnectionResult> {
     const creds = await loadRazorpayCredentials();
     if (!creds) return { ok: false, message: "Razorpay is not configured." };
+    if (creds.problem) return { ok: false, message: creds.problem };
     try {
       // Read-only: lists at most one order. No money moves.
       const res = await httpRequest("Razorpay", `${base()}/v1/orders?count=1`, {

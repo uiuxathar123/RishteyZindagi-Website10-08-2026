@@ -46,6 +46,7 @@ export async function resumeRazorpayCheckout(ctx: AuthContext, paymentId: string
 
   const creds = await loadRazorpayCredentials();
   if (!creds) throw new ServiceUnavailableError("Razorpay is not configured on this server.");
+  if (creds.problem) throw new ServiceUnavailableError(creds.problem);
 
   await record({
     actorType: "USER",

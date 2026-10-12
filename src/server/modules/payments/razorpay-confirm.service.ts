@@ -53,6 +53,7 @@ export async function confirmRazorpayPayment(ctx: AuthContext, paymentId: string
 
   const creds = await loadRazorpayCredentials();
   if (!creds) throw new ConflictError("Razorpay is not configured.");
+  if (creds.problem) throw new ConflictError(creds.problem);
   const expected = expectedRazorpayPaymentSignature(payment.gatewayReference, input.razorpay_payment_id, creds.keySecret);
   if (!constantTimeEqual(input.razorpay_signature.toLowerCase(), expected)) {
     await record({

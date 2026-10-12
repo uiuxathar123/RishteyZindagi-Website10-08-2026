@@ -88,3 +88,20 @@ export async function sendMail(message: MailMessage, context: string): Promise<v
     throw new ServiceUnavailableError("The e-mail could not be delivered right now. Please try again shortly.");
   }
 }
+
+/**
+ * Opens a connection, negotiates TLS/STARTTLS and authenticates — without sending anything. Used by
+ * `npm run check:providers` and available to an admin diagnostic. The result carries only a generic message and
+ * an SMTP/network error CLASS (e.g. "EAUTH", "ECONNREFUSED", "535"), never the server's response text.
+ */
+export async function verifySmtpConnection(): Promise<{ ok: boolean; message: string }> {
+  if (!isMailerConfigured()) return { ok: false, message: `E-mail delivery is not configured. Set ${missingMailerSettings().join(" and ")}.` };
+  try {
+    await transport().verify();
+    return { ok: true, message: "SMTP server accepted the connection and credentials." };
+  } catch (err) {
+    const code = (err as { responseCode?: number; code?: string })?.responseCode ?? (err as { code?: string })?.code ?? "UNKNOWN";
+    logError("smtp-verify-failed", new Error(`SMTP verify failure (${String(code)})`), { context: "verify" });
+    return { ok: false, message: `SMTP connection or login failed (${String(code)}). Check host, port, SMTP_SECURE and the account's app password.` };
+  }
+}

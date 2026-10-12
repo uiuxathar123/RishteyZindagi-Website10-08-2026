@@ -77,10 +77,16 @@ export interface NotifyInput {
   /** Test-only override — see this file's top-of-file comment. Never set
    * by a real call site. */
   devMode?: boolean;
+  /** B18: security / payment / legal notices ignore the member's channel opt-outs. IN_APP is never suppressed. */
+  essential?: boolean;
 }
 
 async function notifyInternal(input: NotifyInput): Promise<NotificationRow | null> {
   const isInApp = input.channel === "IN_APP";
+  // B18: honour the member's per-channel opt-out for NON-essential EMAIL / PUSH / WHATSAPP messages.
+  if (!isInApp && !input.essential && !(await repo.isChannelEnabled(input.userId, input.channel as "EMAIL" | "PUSH" | "WHATSAPP"))) {
+    return null;
+  }
   const inserted = await repo.insertNotification({
     userId: input.userId,
     channel: input.channel,

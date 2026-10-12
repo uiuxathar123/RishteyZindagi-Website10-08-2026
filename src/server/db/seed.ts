@@ -66,7 +66,13 @@ const PERMISSIONS = [
   // master brief's "do not grant STAFF_ADMIN broad access simply for
   // convenience" instruction — see BACKEND.md's B9 section.
   { key: "audit.view", description: "View platform-wide admin audit logs." },
+  // B18: plan editing and community (lookup) management were SQL-only; each is its own SUPER_ADMIN-by-default permission.
   { key: "plans.manage", description: "Create and edit membership plans: prices, durations, entitlements, activation." },
+  { key: "communities.manage", description: "Add, rename and retire community entries used by profiles and search." },
+  // B19: manual profile-approval queue.
+  { key: "profiles.approve", description: "Approve or reject profiles that are waiting in the manual-approval queue." },
+  { key: "support.manage", description: "Read and answer contact-form messages and edit the public support contact details." },
+  { key: "content.manage", description: "Create, edit, publish and remove success stories shown on the public site." },
   { key: "groups.manage", description: "Create and edit community groups, hide posts, and remove members from groups." },
 ];
 
@@ -404,7 +410,8 @@ async function seedPaymentAndMembershipReferenceData(db: NodePgDatabase<typeof s
     await db
       .insert(schema.membershipPlans)
       .values(plan)
-      // B18: re-seeding adds missing plans without overwriting admin-managed values.
+      // B18: a re-seed only ADDS plans that are missing. It no longer overwrites the name, price, duration or
+      // entitlements an admin has edited in the Plans screen (limitation P2-3 in the earlier phase).
       .onConflictDoNothing({ target: schema.membershipPlans.code });
   }
 }

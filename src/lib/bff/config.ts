@@ -33,6 +33,8 @@ export const PUBLIC_AUTH_PATHS = new Set([
   "auth/recover-account/request",
   "auth/recover-account/confirm",
   "admin/login",
+  // B19: second step of an admin sign-in when admin MFA is on.
+  "admin/login/verify-mfa",
 ]);
 
 /** Where the proxy forwards to. Defaults to this same server on loopback so

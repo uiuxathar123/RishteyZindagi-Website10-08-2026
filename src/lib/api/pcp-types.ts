@@ -11,6 +11,10 @@ export interface GatewayConfigView {
   configured: boolean;
   credentialSource: "admin" | "environment" | "none";
   mode: "test" | "live" | null;
+  /** What the key itself declares (rzp_test_ / rzp_live_); null when none / PhonePe. */
+  detectedMode?: "test" | "live" | "unknown" | null;
+  /** Why the credentials are refused in this environment; null when usable. */
+  problem?: string | null;
   /** Names of write-only fields that currently hold a stored value (never the values). */
   storedFields: string[];
   webhook: { configured: boolean; url: string };

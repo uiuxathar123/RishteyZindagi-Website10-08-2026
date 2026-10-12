@@ -5,11 +5,14 @@
  * second, possibly-inconsistent implementation of it — see BACKEND.md's
  * B4 section on the resolveLookups export.
  */
-import { ValidationError } from "@/server/lib/errors";
+import { AuthorizationError, ValidationError } from "@/server/lib/errors";
+import { hasAdvancedSearchEntitlement } from "@/server/modules/memberships/membership-gate";
+import { getSearchSettings } from "@/server/modules/platform-settings/platform-settings.service";
 import type { AuthContext } from "@/server/middleware/authenticate";
 import * as profilesRepo from "@/server/modules/profiles/profiles.repository";
 import * as referenceRepo from "@/server/modules/profiles/reference.repository";
 import { resolveLookups } from "@/server/modules/profiles/profiles.service";
+import { viewerExtrasFor } from "@/server/modules/profiles/privacy";
 import {
   toAuthenticatedPublicView,
   toAnonymousGatedView,
@@ -77,11 +80,44 @@ async function validateFilters(filters: SearchFilters): Promise<void> {
   }
 }
 
+/**
+ * B18: the filters that need a plan with `features.advancedSearch`.
+ * Everything else (gender, age, religion, community, mother tongue, marital
+ * status, country, city) stays free for everyone, anonymous included.
+ */
+export function advancedFiltersUsed(f: SearchFilters): string[] {
+  const used: string[] = [];
+  if (f.profileId) used.push("profileId");
+  if (f.minHeightCm !== undefined) used.push("minHeightCm");
+  if (f.maxHeightCm !== undefined) used.push("maxHeightCm");
+  if (f.minIncome !== undefined) used.push("minIncome");
+  if (f.maxIncome !== undefined) used.push("maxIncome");
+  if (f.educationIds?.length) used.push("educationIds");
+  if (f.professionIds?.length) used.push("professionIds");
+  if (f.anyProfession !== undefined) used.push("anyProfession");
+  return used;
+}
+
+async function enforceAdvancedSearchEntitlement(viewer: AuthContext | null, filters: SearchFilters, enforce: boolean): Promise<void> {
+  if (!enforce) return;
+  const used = advancedFiltersUsed(filters);
+  if (used.length === 0) return;
+  const details = [{ path: "entitlement", message: "advancedSearch" }, ...used.map((path) => ({ path, message: "Requires a plan with advanced search." }))];
+  if (!viewer || viewer.subject.type !== "user") {
+    throw new AuthorizationError("Advanced search filters are available to members with an active plan. Please sign in.", details);
+  }
+  if (!(await hasAdvancedSearchEntitlement(viewer.subject.id))) {
+    throw new AuthorizationError("Advanced search filters need an active membership plan that includes advanced search.", details);
+  }
+}
+
 export async function searchProfiles(viewer: AuthContext | null, input: SearchInput): Promise<SearchResultPage> {
+  const settings = await getSearchSettings();
+  await enforceAdvancedSearchEntitlement(viewer, input.filters, settings.enforceAdvancedSearchEntitlement);
   await validateFilters(input.filters);
 
   const page = input.page ?? 1;
-  const pageSize = Math.min(input.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+  const pageSize = Math.min(input.pageSize ?? settings.defaultPageSize, settings.maxPageSize, MAX_PAGE_SIZE);
   const sortBy = input.sortBy ?? "updatedAt";
   const sortDir = input.sortDir ?? "desc";
 
@@ -96,11 +132,12 @@ export async function searchProfiles(viewer: AuthContext | null, input: SearchIn
     sortDir,
   });
 
+  const extras = viewer && viewer.subject.type === "user" ? await viewerExtrasFor(viewer.subject.id, items.map((i) => i.profile)) : new Map();
   const results = await Promise.all(
     items.map(async (row): Promise<SearchResultProfile> => {
       const [lookups, photos] = await Promise.all([resolveLookups(row.profile), profilesRepo.listPhotos(row.profile.id)]);
       if (viewer) {
-        return { audience: "authenticated", profile: toAuthenticatedPublicView(row.profile, row.displayName, lookups, photos) };
+        return { audience: "authenticated", profile: toAuthenticatedPublicView(row.profile, row.displayName, lookups, photos, extras.get(row.profile.id)) };
       }
       return { audience: "anonymous", profile: toAnonymousGatedView(row.profile, lookups, photos.length > 0) };
     })
@@ -113,4 +150,21 @@ export async function searchProfiles(viewer: AuthContext | null, input: SearchIn
     total,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
   };
+}
+
+export interface SearchAccess {
+  audience: "visitor" | "member";
+  /** True when the caller may use the advanced filters right now. */
+  advancedSearch: boolean;
+  /** The filter names that count as advanced (so the UI never hard-codes a different list). */
+  advancedFilters: string[];
+}
+
+export const ADVANCED_FILTER_NAMES = ["profileId", "minHeightCm", "maxHeightCm", "minIncome", "maxIncome", "educationIds", "professionIds"];
+
+export async function getSearchAccess(viewer: AuthContext | null): Promise<SearchAccess> {
+  const settings = await getSearchSettings();
+  const member = viewer && viewer.subject.type === "user" ? viewer.subject.id : null;
+  const advancedSearch = !settings.enforceAdvancedSearchEntitlement || (member ? await hasAdvancedSearchEntitlement(member) : false);
+  return { audience: member ? "member" : "visitor", advancedSearch, advancedFilters: ADVANCED_FILTER_NAMES };
 }

@@ -35,13 +35,13 @@ It must print `RESULT: OK`. Read every warning; the ones that matter for go-live
 ```
 npm ci
 npm run build                      # needs the environment present (at least DATABASE_URL and AUTH_SECRET — Next.js loads every API route to collect page data and the env is validated; the placeholders from .env.example are enough for the build step). CSP_IMG_SRC_EXTRA (if any) must be set here too
-npm run db:migrate                 # applies drizzle/0000 … 0011
+npm run db:migrate                 # applies drizzle/0000 … 0012
 npm run db:seed                    # roles, permissions, reference data, gateways and PLACEHOLDER membership plans (no dev admin outside development)
 npm run admin:create-super -- --email owner@yourdomain --name "Site Owner"
 npm start                          # binds PORT (default 3000)
 ```
 
-**Before opening the site, set the real membership plan prices.** The seed inserts placeholder plans (e.g. ₹4,499 for 6 months) and there is no admin screen for plans yet (see `PCP_KNOWN_LIMITATIONS.md`, P2-3): edit `membership_plans.price_in_paise` (and `is_active` to hide plans) with SQL. **Re-running `npm run db:seed` resets each plan's name, currency, duration, price and features to the seed values** (it upserts by plan code), so after any later upgrade that needs a re-seed (e.g. new permissions), re-apply your prices afterwards.
+**Before opening the site, set the real membership plan prices** in *Admin → Super Admin → Membership Plans* (B18; `plans.manage`). The seed inserts placeholder plans (e.g. ₹4,499 for 6 months); price, name, the advanced-search entitlement and active/inactive are editable there, every change is audited. **Re-running `npm run db:seed` resets each plan's name, currency, duration, price and features to the seed values** (it upserts by plan code), so after any later upgrade that needs a re-seed (e.g. new permissions), re-apply your prices afterwards.
 
 `admin:create-super` prints a 16-character temporary password **once**. Sign in at `/admin/login`; the panel immediately forces you to choose your own password (≥ 10 characters) before anything else is available. It refuses to run if a Super Admin already exists (use **Admin → Staff & Roles** for everyone else) and writes an audit entry without the password. Do not set `SEED_DEV_SUPER_ADMIN` in production — `check:prod-env` fails if you do.
 
@@ -69,7 +69,7 @@ Details and the first-live-payment checklist: `PAYMENT_SETUP.md`. Webhook routes
 
 ## 6. Scheduled jobs
 
-Six idempotent jobs; each takes a Postgres advisory lock (a second concurrent run is skipped, not duplicated), records a row in `job_runs` and an audit entry.
+Eight idempotent jobs; each takes a Postgres advisory lock (a second concurrent run is skipped, not duplicated), records a row in `job_runs` and an audit entry.
 
 | Job | Schedule | Purpose |
 |---|---|---|
@@ -79,6 +79,8 @@ Six idempotent jobs; each takes a Postgres advisory lock (a second concurrent ru
 | `payment-reconcile` | `*/10 * * * *` | Settle stale PENDING payments/refunds from the gateway; close unpaid expired orders; flag late captures. |
 | `account-deletion-finalize` | `30 2 * * *` | Anonymise accounts past the recovery window; remove their photos. |
 | `housekeeping` | `17 * * * *` | Prune rate-limit counters, webhook-idempotency rows, old job history. |
+| `member-digest` | `30 3 * * 1` | B19: weekly e-mail summary (counts only) to members who opted in. Needs SMTP. See `LOCAL_SETUP.md` §18. |
+| `membership-dunning` | `15 * * * *` | B19: renewal follow-up reminders for lapsed memberships. Reminders only — never charges anyone. See `LOCAL_SETUP.md` §18. |
 
 Option A — CLI from cron (recommended; needs no network exposure):
 
@@ -111,4 +113,4 @@ Migrating existing local-disk files to S3 is not automated; for a fresh launch t
 - Logs: one JSON line per request, secrets redacted. Alert on `statusCode >= 500` rates, `/health/ready` non-200, and webhook rows with outcome `FAILED` in `payment_webhook_events`.
 - Admin audit trail: **Admin → Audit Log** (every payment switch, OTP switch, staff change, moderation action, refund, job run).
 - Rotating secrets: `AUTH_SECRET` (signs everyone out), `PAYMENT_CREDENTIALS_ENCRYPTION_KEY` (re-enter gateway credentials afterwards), `CRON_SECRET` (update the scheduler), gateway/OTP/S3 keys (update env or the admin screen).
-- Rollback: `DEPLOYMENT.md` §7. Migration `0011` is additive only (new tables/columns), so rolling the application back leaves it harmlessly in place.
+- Rollback: `DEPLOYMENT.md` §7. Migrations `0011` and `0012` are additive only (new tables/columns), so rolling the application back leaves it harmlessly in place.

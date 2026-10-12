@@ -20,7 +20,14 @@ export interface RazorpayCredentials {
   keyId: string;
   keySecret: string;
   webhookSecret?: string;
+  /** Detected from the key id prefix (rzp_test_ / rzp_live_) — never from a label an admin typed. */
   mode: "test" | "live" | "unknown";
+  /**
+   * Set when this key must NOT be used in this environment (see `razorpayKeyModeProblem`). Callers that would
+   * create an order, confirm, resume or refund a payment refuse to proceed while it is set; the admin status
+   * shows it. Never contains key material.
+   */
+  problem?: string;
 }
 
 export interface PhonePeCredentials {
@@ -30,6 +37,26 @@ export interface PhonePeCredentials {
   environment: "sandbox" | "production";
   webhookUsername?: string;
   webhookPassword?: string;
+}
+
+/**
+ * Key-mode guard (fail closed). This deployment pairs Razorpay TEST keys with non-production environments and
+ * LIVE keys with production, and never the other way round:
+ *  - production + anything other than an `rzp_live_` key → refused (a test key must not run a production checkout);
+ *  - any other environment + an `rzp_live_` key → refused (local/staging runs must never be able to move real money).
+ * Unprefixed key ids are tolerated outside production only (protocol mocks and legacy fixtures use them).
+ */
+export function razorpayKeyModeProblem(mode: "test" | "live" | "unknown", nodeEnv: string): string | undefined {
+  if (nodeEnv === "production") {
+    if (mode === "live") return undefined;
+    return mode === "test"
+      ? "A Razorpay TEST key is configured but this server runs in production. Replace it with the account's LIVE key before taking real payments."
+      : "The configured Razorpay key id is not a recognised live key (rzp_live_…). Production only accepts live keys.";
+  }
+  if (mode === "live") {
+    return "A Razorpay LIVE key is configured but this is not a production environment. Use a TEST key (rzp_test_…): non-production environments are never allowed to move real money.";
+  }
+  return undefined;
 }
 
 async function storedConfig(name: string): Promise<GatewayConfig> {
@@ -55,7 +82,7 @@ export async function loadRazorpayCredentials(): Promise<RazorpayCredentials | n
   if (!keyId || !keySecret) return null;
   const webhookSecret = decryptField(enc.webhookSecret, "Razorpay") ?? env.RAZORPAY_WEBHOOK_SECRET;
   const mode = keyId.startsWith("rzp_live_") ? "live" : keyId.startsWith("rzp_test_") ? "test" : "unknown";
-  return { keyId, keySecret, webhookSecret: webhookSecret || undefined, mode };
+  return { keyId, keySecret, webhookSecret: webhookSecret || undefined, mode, problem: razorpayKeyModeProblem(mode, env.NODE_ENV) };
 }
 
 export async function loadPhonePeCredentials(): Promise<PhonePeCredentials | null> {

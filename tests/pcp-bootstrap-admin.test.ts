@@ -3,7 +3,6 @@
  * Real service + real PostgreSQL + one real CLI invocation.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
@@ -16,6 +15,7 @@ import { POST as adminLoginRoute } from "@/app/api/v1/admin/login/route";
 import { GET as adminMe } from "@/app/api/v1/admin/me/route";
 import { GET as listAdminUsers } from "@/app/api/v1/admin/users/route";
 import { POST as changePassword } from "@/app/api/v1/admin/me/password/route";
+import { runTsxSync } from "./helpers/run-tsx";
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -75,7 +75,7 @@ describe("first Super Admin bootstrap", () => {
 
   it("[bootstrap-cli] the npm script prints the one-time password once and exits 0; a repeat exits 1 with no password", async () => {
     const run = (extra: string[] = []) =>
-      spawnSync("npx", ["--no-install", "tsx", "scripts/create-super-admin.ts", "--email", "cli.owner@example.com", "--name", "CLI Owner", ...extra], {
+      runTsxSync(["scripts/create-super-admin.ts", "--email", "cli.owner@example.com", "--name", "CLI Owner", ...extra], {
         cwd: ROOT,
         encoding: "utf8",
         env: process.env,
@@ -88,7 +88,7 @@ describe("first Super Admin bootstrap", () => {
     const second = run();
     expect(second.status).toBe(1);
     expect(second.stdout + second.stderr).not.toMatch(/Temporary password/);
-    const noArgs = spawnSync("npx", ["--no-install", "tsx", "scripts/create-super-admin.ts"], { cwd: ROOT, encoding: "utf8", env: process.env, timeout: 120_000 });
+    const noArgs = runTsxSync(["scripts/create-super-admin.ts"], { cwd: ROOT, encoding: "utf8", env: process.env, timeout: 120_000 });
     expect(noArgs.status).toBe(1);
   });
 });

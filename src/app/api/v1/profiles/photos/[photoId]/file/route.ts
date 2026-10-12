@@ -24,7 +24,7 @@ export const GET = withErrorHandling(async (req, ctx) => {
       "Content-Type": contentType,
       // Private — this is a gated, per-viewer-authorized asset, never a
       // publicly cacheable one (see B3 §16).
-      "Cache-Control": "private, max-age=300",
+      "Cache-Control": "private, no-store",
     },
   });
 });

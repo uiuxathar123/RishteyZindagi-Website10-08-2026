@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PermissionGate } from "@/components/admin/PermissionGate";
 import { ReportsClient } from "@/components/admin/ReportsClient";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AdminReportsPage() {
-  return <ReportsClient />;
+  return (
+    <PermissionGate needs={["reports.resolve"]} what="Reports">
+      <ReportsClient />
+    </PermissionGate>
+  );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Logo } from "@/components/layout/Header";
+import { useMyPrimaryPhoto } from "@/components/profile/useMyPrimaryPhoto";
 import { useSession } from "@/components/session/SessionProvider";
 import { api } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
@@ -34,7 +36,17 @@ function initialsOf(name: string): string {
   return (first + last).toUpperCase();
 }
 
-function InitialsAvatar({ name, className }: { name: string; className?: string }) {
+/** The member's own photo when they have one; otherwise their initials. */
+function InitialsAvatar({ name, src, className }: { name: string; src?: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (src && !failed) {
+    return (
+      <span className={cn("relative block h-9 w-9 shrink-0 overflow-hidden rounded-full bg-rz-peach", className)}>
+        <Image src={src} alt="" aria-hidden="true" fill sizes="36px" unoptimized onError={() => setFailed(true)} className="object-cover" />
+      </span>
+    );
+  }
   return (
     <span
       aria-hidden="true"
@@ -131,6 +143,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const { user } = useSession();
   const displayName = user?.name ?? "Member";
+  const myPhoto = useMyPrimaryPhoto();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
 
   const refreshUnread = useCallback(async () => {
@@ -266,7 +279,7 @@ export function DashboardShell({
                 aria-expanded={menuOpen}
                 className="rz-focus flex items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-rz-peach/60"
               >
-                <InitialsAvatar name={displayName} />
+                <InitialsAvatar name={displayName} src={myPhoto} />
                 <span className="hidden max-w-[160px] truncate text-sm font-semibold text-rz-navy sm:block">
                   {displayName}
                 </span>

@@ -72,21 +72,50 @@ export async function invalidateActive(identifier: string, purpose: OtpPurpose):
     );
 }
 
-export async function incrementAttempts(id: string): Promise<OtpRow> {
+export async function incrementAttempts(id: string, now = new Date()): Promise<OtpRow | undefined> {
   const [row] = await db
     .update(otps)
-    .set({ attempts: sql`${otps.attempts} + 1` })
-    .where(eq(otps.id, id))
+    .set({
+      attempts: sql`${otps.attempts} + 1`,
+      invalidatedAt: sql`CASE WHEN ${otps.attempts} + 1 >= ${otps.maxAttempts} THEN ${now} ELSE ${otps.invalidatedAt} END`,
+    })
+    .where(
+      and(
+        eq(otps.id, id),
+        sql`${otps.attempts} < ${otps.maxAttempts}`,
+        isNull(otps.consumedAt),
+        isNull(otps.invalidatedAt),
+        gt(otps.expiresAt, now)
+      )
+    )
     .returning();
   return row;
 }
 
-export async function markConsumed(id: string): Promise<void> {
-  await db.update(otps).set({ consumedAt: new Date() }).where(eq(otps.id, id));
+export async function invalidateExhausted(id: string, now = new Date()): Promise<void> {
+  await db
+    .update(otps)
+    .set({ invalidatedAt: now })
+    .where(and(eq(otps.id, id), sql`${otps.attempts} >= ${otps.maxAttempts}`, isNull(otps.consumedAt), isNull(otps.invalidatedAt)));
 }
 
-export async function markInvalidated(id: string): Promise<void> {
-  await db.update(otps).set({ invalidatedAt: new Date() }).where(eq(otps.id, id));
+export async function consumeActive(id: string, identifier: string, purpose: OtpPurpose, now = new Date()): Promise<OtpRow | undefined> {
+  const [row] = await db
+    .update(otps)
+    .set({ consumedAt: now })
+    .where(
+      and(
+        eq(otps.id, id),
+        eq(otps.identifier, identifier),
+        eq(otps.purpose, purpose),
+        sql`${otps.attempts} < ${otps.maxAttempts}`,
+        isNull(otps.consumedAt),
+        isNull(otps.invalidatedAt),
+        gt(otps.expiresAt, now)
+      )
+    )
+    .returning();
+  return row;
 }
 
 export async function setTicket(id: string, ticketHash: string, ticketExpiresAt: Date): Promise<void> {
@@ -101,6 +130,26 @@ export async function findByTicketHash(ticketHash: string): Promise<OtpRow | und
   return row;
 }
 
-export async function consumeTicket(id: string): Promise<void> {
-  await db.update(otps).set({ ticketConsumedAt: new Date() }).where(eq(otps.id, id));
+export async function consumeTicket(
+  id: string,
+  identifier: string,
+  purpose: OtpPurpose,
+  ticketHash: string,
+  now = new Date()
+): Promise<OtpRow | undefined> {
+  const [row] = await db
+    .update(otps)
+    .set({ ticketConsumedAt: now })
+    .where(
+      and(
+        eq(otps.id, id),
+        eq(otps.identifier, identifier),
+        eq(otps.purpose, purpose),
+        eq(otps.ticketHash, ticketHash),
+        isNull(otps.ticketConsumedAt),
+        gt(otps.ticketExpiresAt, now)
+      )
+    )
+    .returning();
+  return row;
 }

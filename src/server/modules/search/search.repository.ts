@@ -32,6 +32,8 @@ export interface SearchFilters {
   minIncome?: number;
   maxIncome?: number;
   incomeCurrency?: string;
+  /** B18: exact member-facing profile ID (RZ + 8 digits), already upper-cased by the controller. */
+  profileId?: string;
   /** Self-exclusion (§12) — the signed-in requester's own users.id, never
    * applied for an anonymous search. */
   excludeUserId?: string;
@@ -65,8 +67,13 @@ function buildConditions(filters: SearchFilters) {
     // public-profile-view route uses (READY_FOR_VISIBILITY + ACTIVE
     // account), never re-derived differently here.
     eq(profiles.profileStatus, "READY_FOR_VISIBILITY"),
+    // B19: manual-approval queue — pending/rejected profiles are never searchable.
+    eq(profiles.approvalStatus, "APPROVED"),
     eq(users.status, "ACTIVE"),
+    // B18: a member who chose "hide my profile" never appears in search.
+    eq(profiles.profileVisibility, "VISIBLE"),
   ];
+  if (filters.profileId) conditions.push(eq(profiles.publicId, filters.profileId));
 
   if (filters.excludeUserId) {
     conditions.push(ne(profiles.userId, filters.excludeUserId));

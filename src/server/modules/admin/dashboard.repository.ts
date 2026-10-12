@@ -14,7 +14,7 @@
  * solve (see BACKEND.md's B9 section for the explicit disclosure asked
  * for by the brief).
  */
-import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { count, sum } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { users, profiles, memberships, payments, reports, accountSuspensions } from "@/server/db/schema";
@@ -131,4 +131,50 @@ export async function getOpenReportsCount(): Promise<number> {
 export async function getSuspendedAfterThresholdCount(): Promise<number> {
   const [row] = await db.select({ c: count() }).from(accountSuspensions).where(isNull(accountSuspensions.liftedAt));
   return Number(row?.c ?? 0);
+}
+
+// ---------------------------------------------------------------------------
+// B19: daily trend series
+// ---------------------------------------------------------------------------
+
+export interface TrendDay {
+  date: string; // YYYY-MM-DD in Asia/Kolkata (the business's day boundary)
+  signups: number;
+  paymentsSucceeded: number;
+  reportsOpened: number;
+  revenue: Record<string, number>; // currency -> amount in the smallest unit, from verified successful payments
+}
+
+/**
+ * One row per calendar day (Asia/Kolkata) for the last `days` days including today, zero-filled, from the same
+ * tables the point-in-time totals read. Four indexed range scans; no new storage.
+ */
+export async function getDailyTrends(days: number): Promise<TrendDay[]> {
+  const tz = "Asia/Kolkata";
+  const result = await db.execute(sql`
+    WITH d AS (
+      SELECT generate_series((now() AT TIME ZONE ${tz})::date - (${days}::int - 1), (now() AT TIME ZONE ${tz})::date, interval '1 day')::date AS day
+    ),
+    su AS (SELECT (created_at AT TIME ZONE ${tz})::date AS day, count(*)::int AS c FROM users WHERE created_at >= now() - (${days}::int + 1) * interval '1 day' GROUP BY 1),
+    pc AS (SELECT (verified_at AT TIME ZONE ${tz})::date AS day, count(*)::int AS c FROM payments WHERE status = 'SUCCESS' AND verified_at IS NOT NULL AND verified_at >= now() - (${days}::int + 1) * interval '1 day' GROUP BY 1),
+    rv AS (SELECT (verified_at AT TIME ZONE ${tz})::date AS day, currency, sum(amount_in_paise)::bigint AS amt FROM payments WHERE status = 'SUCCESS' AND verified_at IS NOT NULL AND verified_at >= now() - (${days}::int + 1) * interval '1 day' GROUP BY 1, 2),
+    rp AS (SELECT (created_at AT TIME ZONE ${tz})::date AS day, count(*)::int AS c FROM reports WHERE created_at >= now() - (${days}::int + 1) * interval '1 day' GROUP BY 1)
+    SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
+           COALESCE(su.c, 0) AS signups,
+           COALESCE(pc.c, 0) AS payments_succeeded,
+           COALESCE(rp.c, 0) AS reports_opened,
+           COALESCE((SELECT jsonb_object_agg(rv.currency, rv.amt) FROM rv WHERE rv.day = d.day), '{}'::jsonb) AS revenue
+    FROM d
+    LEFT JOIN su ON su.day = d.day
+    LEFT JOIN pc ON pc.day = d.day
+    LEFT JOIN rp ON rp.day = d.day
+    ORDER BY d.day
+  `);
+  return (result.rows as Array<Record<string, unknown>>).map((r) => ({
+    date: String(r.date),
+    signups: Number(r.signups),
+    paymentsSucceeded: Number(r.payments_succeeded),
+    reportsOpened: Number(r.reports_opened),
+    revenue: Object.fromEntries(Object.entries((r.revenue as Record<string, string | number>) ?? {}).map(([k, v]) => [k, Number(v)])),
+  }));
 }

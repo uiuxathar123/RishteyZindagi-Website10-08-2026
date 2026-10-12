@@ -47,8 +47,8 @@ export class AuthenticationError extends AppError {
 }
 
 export class AuthorizationError extends AppError {
-  constructor(message = "You do not have permission to perform this action.") {
-    super("AUTHORIZATION_ERROR", 403, message);
+  constructor(message = "You do not have permission to perform this action.", details?: unknown) {
+    super("AUTHORIZATION_ERROR", 403, message, details);
   }
 }
 
@@ -83,7 +83,7 @@ export class InternalError extends AppError {
  * unexpected bug. Never thrown with the credential name or value in the
  * message — see each provider's isConfigured() check. */
 export class ServiceUnavailableError extends AppError {
-  constructor(message = "This service is temporarily unavailable. Please try again later.") {
-    super("SERVICE_UNAVAILABLE", 503, message);
+  constructor(message = "This service is temporarily unavailable. Please try again later.", details?: unknown) {
+    super("SERVICE_UNAVAILABLE", 503, message, details);
   }
 }

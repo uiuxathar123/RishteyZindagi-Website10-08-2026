@@ -17,6 +17,7 @@ import { ActionError, fieldIssue, Modal, NotAvailable, PageHeader, Pagination, S
 import type { AdminInvoiceRow, AdminMembershipRow, AdminPaymentRow, AdminPaymentsResponse, Page } from "./adminTypes";
 import { revenueRows } from "./OverviewClient";
 import { RefundModal } from "./RefundModal";
+import { ReconcilePanel } from "./ReconcilePanel";
 
 type Tone = "success" | "gold" | "maroon" | "neutral" | "navy";
 const PAYMENT_TONE: Record<string, Tone> = { SUCCESS: "success", PENDING: "gold", FAILED: "maroon", REFUNDED: "navy" };
@@ -69,6 +70,9 @@ export function RevenueClient() {
           );
         }}
       </AsyncView>
+
+      <ReconcilePanel onDone={dash.reload} />
+      <RenewalFollowUp />
 
       <div className="mt-8">
         <Tabs
@@ -467,3 +471,34 @@ function MembershipsTab() {
   );
 }
 
+
+interface RenewalOverview {
+  counts: Record<"LAPSED" | "FOLLOW_UP_SENT" | "RENEWED" | "CLOSED", number>;
+  recent: Array<{ membershipId: string; userId: string; planName: string | null; state: string; lapsedAt: string; lastNoticeAt: string | null }>;
+  note: string;
+}
+
+/** Renewal follow-up cycles (reminders only — the platform never charges a member automatically). */
+function RenewalFollowUp() {
+  const view = useAsync((signal) => adminApi.get<RenewalOverview>("/renewals", { signal }), []);
+  return (
+    <section className="mt-8" aria-label="Renewal follow-up" data-testid="renewal-followup">
+      <h3 className="font-serif text-base font-semibold text-rz-navy">Renewal follow-up</h3>
+      <AsyncView data={view.data} error={view.error} loading={view.loading} reload={view.reload} skeleton={<ListSkeleton rows={2} />}>
+        {(d) => (
+          <>
+            <p className="mt-1 text-[12.5px] text-rz-muted">{d.note}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {([["LAPSED", "Lapsed"], ["FOLLOW_UP_SENT", "Reminded"], ["RENEWED", "Renewed"], ["CLOSED", "Closed, no reply"]] as const).map(([k, label]) => (
+                <div key={k} className="rounded-lg border border-rz-border bg-white p-3">
+                  <dt className="text-xs text-rz-muted">{label}</dt>
+                  <dd className="font-serif text-xl font-semibold text-rz-navy">{d.counts[k].toLocaleString("en-IN")}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        )}
+      </AsyncView>
+    </section>
+  );
+}

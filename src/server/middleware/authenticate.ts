@@ -65,6 +65,11 @@ export async function authenticate(req: Request): Promise<AuthContext> {
   if (session.userId) {
     const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
     if (!user || user.status !== "ACTIVE") throw new AuthenticationError("Account is not active.");
+    // B18: record activity (throttled to once per 5 minutes) — powers the opt-in "Active this week"
+    // hint and the Admin Panel's last-active sort/filter. Best-effort, never fails the request.
+    if (!user.lastActiveAt || Date.now() - user.lastActiveAt.getTime() > 5 * 60_000) {
+      db.update(users).set({ lastActiveAt: new Date() }).where(eq(users.id, user.id)).catch(() => undefined);
+    }
     return { subject: { id: user.id, type: "user" }, sessionId: session.id };
   }
 

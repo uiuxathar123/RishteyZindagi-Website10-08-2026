@@ -20,9 +20,13 @@ import {
   SlidersHorizontal,
   IndianRupee,
   ScrollText,
-  ShieldAlert,
   UserX,
   BadgePercent,
+  Network,
+  ShieldAlert,
+  ShieldCheck,
+  Inbox,
+  Heart,
   MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,6 +45,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, needs: ["users.view"] },
   { href: "/admin/users", label: "Users", icon: Users, needs: ["users.view"] },
   { href: "/admin/profiles", label: "Profile Approvals", icon: UserCheck, needs: ["users.view", "profiles.verify"] },
+  { href: "/admin/visibility-queue", label: "Visibility Queue", icon: ShieldCheck, needs: ["profiles.approve"] },
+  { href: "/admin/inbox", label: "Support Inbox", icon: Inbox, needs: ["support.manage"] },
+  { href: "/admin/stories", label: "Success Stories", icon: Heart, needs: ["content.manage"] },
   { href: "/admin/groups", label: "Community Groups", icon: MessagesSquare, needs: ["groups.manage"] },
   { href: "/admin/reports", label: "Reports", icon: Flag, needs: ["reports.resolve"] },
   { href: "/admin/account-deletions", label: "Account Deletions", icon: UserX, needs: ["users.view"] },
@@ -60,10 +67,13 @@ const SUPER_ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/super/staff", label: "Staff & Roles", icon: UserCog },
   { href: "/admin/super/settings", label: "Platform Settings", icon: SlidersHorizontal, needs: ["platform.settings.manage"] },
   { href: "/admin/super/membership-plans", label: "Membership Plans", icon: BadgePercent, needs: ["plans.manage"] },
+  { href: "/admin/super/communities", label: "Communities", icon: Network, needs: ["communities.manage"] },
   { href: "/admin/super/revenue", label: "Revenue", icon: IndianRupee, needs: ["payments.review"] },
   { href: "/admin/super/audit-log", label: "Audit Log", icon: ScrollText, needs: ["audit.view"] },
   { href: "/admin/super/security-events", label: "Security Events", icon: ShieldAlert, needs: ["audit.view"] },
 ];
+
+const DELEGABLE_HREFS = new Set(["/admin/super/membership-plans", "/admin/super/communities"]);
 
 function isActive(pathname: string, href: string) {
   if (href === "/admin" || href === "/admin/super") return pathname === href;
@@ -106,8 +116,8 @@ function NavLink({
 function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { can, isSuper } = useAdminSession();
   const visible = (item: NavItem) => !item.needs || item.needs.every(can);
-  // B18: staff with plans.manage can reach plan management.
-  const delegated = isSuper ? [] : SUPER_ADMIN_NAV_ITEMS.filter((i) => i.href === "/admin/super/membership-plans" && visible(i));
+  // B19: plans / communities screens can be delegated to staff holding the permission; they show up in the main list.
+  const delegated = isSuper ? [] : SUPER_ADMIN_NAV_ITEMS.filter((i) => DELEGABLE_HREFS.has(i.href) && visible(i));
   const main = [...NAV_ITEMS.filter(visible), ...delegated];
   const superItems = isSuper ? SUPER_ADMIN_NAV_ITEMS.filter(visible) : [];
   return (

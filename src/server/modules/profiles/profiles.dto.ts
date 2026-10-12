@@ -60,6 +60,8 @@ export function toOwnerPhotoView(photo: ProfilePhotoRow): OwnerPhotoView {
 
 export interface OwnerProfileView {
   id: string;
+  /** B18: the member-facing profile ID (RZ + 8 digits) — shareable, searchable, never a database key. */
+  profileId: string;
   userId: string;
   displayName: string;
   gender: string;
@@ -92,6 +94,8 @@ export interface OwnerProfileView {
   missingRequiredFields: string[];
   profileStatus: ProfileStatus;
   isReadyForVisibility: boolean;
+  approvalStatus: string;
+  approvalReason: string | null;
   photos: OwnerPhotoView[];
   createdAt: string;
   updatedAt: string;
@@ -113,6 +117,7 @@ export function toOwnerProfileView(
 
   return {
     id: profile.id,
+    profileId: profile.publicId,
     userId: profile.userId,
     displayName,
     gender: profile.gender,
@@ -143,6 +148,9 @@ export function toOwnerProfileView(
     missingRequiredFields: completion.missingRequiredFields,
     profileStatus: completion.profileStatus,
     isReadyForVisibility: completion.profileStatus === "READY_FOR_VISIBILITY",
+    // B19: manual-approval state (PENDING = waiting for an admin, REJECTED = hidden; the reason is shown to the owner only).
+    approvalStatus: profile.approvalStatus,
+    approvalReason: profile.approvalStatus === "REJECTED" ? profile.approvalReason ?? null : null,
     photos: photos.map(toOwnerPhotoView),
     createdAt: profile.createdAt.toISOString(),
     updatedAt: profile.updatedAt.toISOString(),
@@ -157,6 +165,8 @@ export interface AuthenticatedPublicPhotoView {
 
 export interface AuthenticatedPublicProfileView {
   id: string;
+  /** B18: member-facing profile ID (RZ + 8 digits). Not part of the anonymous gated view. */
+  profileId: string;
   /** B16: the owning member's user id. Every interaction/chat/report API
    * addresses a *user*, while this view is addressed by *profile* id, so
    * without this field an authenticated client has no way to act on a
@@ -179,6 +189,10 @@ export interface AuthenticatedPublicProfileView {
   aboutMe: string | null;
   verificationStatus: string;
   photos: AuthenticatedPublicPhotoView[];
+  /** B18: true when the owner limited photos to accepted connections and the viewer is not one. */
+  photosRestricted: boolean;
+  /** B18: coarse activity label ("Active this week"); null when the owner hides it or it is unknown. */
+  lastActive: string | null;
 }
 
 /** Full non-owner authenticated view — never includes email, mobile,
@@ -187,10 +201,14 @@ export function toAuthenticatedPublicView(
   profile: ProfileRow,
   displayName: string,
   lookups: ResolvedLookups,
-  photos: ProfilePhotoRow[]
+  photos: ProfilePhotoRow[],
+  /** B18 (see privacy.ts). Fail-closed: omitted extras mean photos are withheld when the owner restricted them. */
+  extras?: { photosVisible?: boolean; lastActive?: string | null }
 ): AuthenticatedPublicProfileView {
+  const photosRestricted = profile.photoVisibility === "ACCEPTED_ONLY" && extras?.photosVisible !== true;
   return {
     id: profile.id,
+    profileId: profile.publicId,
     userId: profile.userId,
     displayName,
     age: computeAge(profile.dateOfBirth),
@@ -207,7 +225,9 @@ export function toAuthenticatedPublicView(
     city: lookups.city?.name ?? null,
     aboutMe: profile.aboutMe,
     verificationStatus: profile.verificationStatus,
-    photos: photos.map((p) => ({ id: p.id, url: gatedPhotoUrl(p.id), isPrimary: p.isPrimary })),
+    photos: photosRestricted ? [] : photos.map((p) => ({ id: p.id, url: gatedPhotoUrl(p.id), isPrimary: p.isPrimary })),
+    photosRestricted,
+    lastActive: profile.showLastActive ? extras?.lastActive ?? null : null,
   };
 }
 

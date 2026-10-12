@@ -1,5 +1,7 @@
 # Known limitations — Production Completion Phase
 
+> **B18 update:** some items below are superseded (membership-plan editor built, `GatewaysPanel` removed, privacy / notification / session controls built). See `B18_KNOWN_LIMITATIONS.md` for the current list.
+
 Severity: **P0** = data loss / security breach / cannot operate; **P1** = a core production feature does not work; **P2** = works, but with a material caveat the owner must know before launch; **P3** = minor or cosmetic.
 
 **There are no open P0 or P1 findings.** Everything below is a P2/P3 that is either an external dependency, a documented design decision, or a follow-up. Anything not exercised against a real third party is labelled so.

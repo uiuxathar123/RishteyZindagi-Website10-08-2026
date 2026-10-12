@@ -14,6 +14,7 @@ import { fail } from "@/server/lib/response";
 import { logError, logRequest } from "@/server/lib/logger";
 import type { AuthContext } from "./authenticate";
 import { enforceRateLimitPolicy, PolicyRateLimitError } from "./rate-limit-policy";
+import { enforceMaintenance } from "./maintenance";
 
 export interface RouteContext {
   requestId: string;
@@ -40,6 +41,8 @@ export function withErrorHandling(handler: Handler) {
       // PCP: central, shared-store rate-limit policy (additive hook — a no-op
       // when the policy is disabled or no rule matches).
       await enforceRateLimitPolicy(req);
+      // B19: Super-Admin maintenance mode (member endpoints only; admin/webhooks/jobs/health are exempt).
+      await enforceMaintenance(req);
       const res = await handler(req, ctx);
       logRequest({
         requestId,

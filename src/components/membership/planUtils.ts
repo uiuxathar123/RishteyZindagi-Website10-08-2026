@@ -10,12 +10,13 @@ import { humanize } from "@/lib/format";
  */
 const FEATURE_LABELS: Record<string, string> = {
   chat: "Chat with your matches",
-  unlimitedInterests: "Unlimited interests",
-  shortlist: "Shortlist profiles",
   advancedSearch: "Advanced search filters",
   visibilityBoost: "Profile visibility boost",
 };
 const FEATURE_ORDER = Object.keys(FEATURE_LABELS);
+// Retired flags: shortlist and interests are open to every member, so an old
+// plan row that still carries them must not show them as paid benefits.
+const RETIRED_FEATURES = new Set(["unlimitedInterests", "shortlist"]);
 
 export function featureLabel(key: string): string {
   return FEATURE_LABELS[key] ?? humanize(key.replace(/([a-z])([A-Z])/g, "$1 $2"));
@@ -24,7 +25,7 @@ export function featureLabel(key: string): string {
 /** Flag keys present on at least one plan, in a stable, readable order. */
 export function featureKeysOf(plans: MembershipPlan[]): string[] {
   const keys = new Set<string>();
-  for (const p of plans) for (const k of Object.keys(p.features ?? {})) keys.add(k);
+  for (const p of plans) for (const k of Object.keys(p.features ?? {})) if (!RETIRED_FEATURES.has(k)) keys.add(k);
   const known = FEATURE_ORDER.filter((k) => keys.has(k));
   const extra = Array.from(keys).filter((k) => !FEATURE_ORDER.includes(k)).sort();
   return [...known, ...extra];

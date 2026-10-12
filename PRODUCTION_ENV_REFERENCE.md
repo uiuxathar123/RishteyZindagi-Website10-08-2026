@@ -91,3 +91,7 @@ At least one of Email or Fast2SMS must be complete in production, otherwise nobo
 ## Secrets that are never environment variables
 
 Member passwords and admin passwords are stored only as bcrypt hashes; session tokens only as hashes in `device_sessions`; OTP codes only as hashes; admin-saved gateway credentials only as AES-GCM ciphertext. The admin APIs never return a stored secret (the payment/OTP/staff tests assert this on the responses), and `tests/pcp-security.test.ts` runs a static scan of source, the env template and the frontend bundle configuration for secret exposure. A static scan cannot prove a log line is clean in every code path; the specific logging paths for OTP codes, SMTP/SMS bodies and gateway credentials are covered by the module tests.
+
+## B18 note
+
+B18 adds **no new environment variables**. The OTP-required / OTP-not-required policy, sign-up open/closed and search limits are stored in the `platform_settings` table and changed by a Super Admin in Admin → Settings; the safe default when nothing is stored is "OTP required".

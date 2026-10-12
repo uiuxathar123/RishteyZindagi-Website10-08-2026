@@ -63,7 +63,7 @@ export async function revokePermission(roleName: string, key: string) {
   await db.execute(sql`DELETE FROM role_permissions WHERE role_id = ${role.id} AND permission_id = ${perm.id}`);
 }
 
-/** Truncates the PCP-owned tables that are not cascaded by resetTransactionalTables(). */
+/** Truncates PCP-owned tables. Safe to call after resetTransactionalTables(), which now includes the same names in one statement. */
 export async function resetPcpTables() {
   await db.execute(sql`TRUNCATE TABLE job_runs, rate_limit_counters, payment_webhook_events RESTART IDENTITY CASCADE`);
 }

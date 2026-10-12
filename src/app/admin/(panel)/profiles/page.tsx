@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PermissionGate } from "@/components/admin/PermissionGate";
 import { ProfileApprovalsClient } from "@/components/admin/ProfileApprovalsClient";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AdminProfileApprovalsPage() {
-  return <ProfileApprovalsClient />;
+  return (
+    <PermissionGate needs={["users.view", "profiles.verify"]} what="Profile approvals">
+      <ProfileApprovalsClient />
+    </PermissionGate>
+  );
 }

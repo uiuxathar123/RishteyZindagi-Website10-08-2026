@@ -29,3 +29,71 @@ export async function patchOtpPolicyHandler(req: NextRequest) {
   const view = await svc.setOtpPolicy(ctx, body, meta(req));
   return ok(view, "OTP policy saved.");
 }
+
+const settingsBody = z
+  .object({
+    search: z
+      .object({
+        defaultPageSize: z.number().int().optional(),
+        maxPageSize: z.number().int().optional(),
+        enforceAdvancedSearchEntitlement: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    signup: z.object({ open: z.boolean().optional(), closedMessage: z.string().max(300).optional() }).strict().optional(),
+  })
+  .strict()
+  .refine((v) => v.search !== undefined || v.signup !== undefined, { message: "Provide search and/or signup settings." });
+
+export async function getPlatformSettingsHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  return ok(await svc.getPlatformSettingsView(ctx));
+}
+
+export async function patchPlatformSettingsHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  checkRateLimit(`platform-settings-update:${ctx.subject.id}`, 30, 60_000);
+  const body = await parseJsonBody(req, settingsBody);
+  return ok(await svc.updatePlatformSettings(ctx, body, meta(req)), "Settings saved.");
+}
+
+// B19: Super-Admin-only site controls (maintenance mode, manual profile approval) + public status.
+const siteControlsBody = z
+  .object({
+    maintenance: z.object({ enabled: z.boolean().optional(), message: z.string().max(300).optional() }).strict().optional(),
+    approval: z.object({ manualApproval: z.boolean().optional() }).strict().optional(),
+    digest: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+    reason: z.string().trim().max(300).optional(),
+  })
+  .strict()
+  .refine((v) => v.maintenance !== undefined || v.approval !== undefined || v.digest !== undefined, { message: "Provide maintenance, approval and/or digest settings." });
+
+export async function getSiteControlsHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  return ok(await svc.getSiteControlsView(ctx));
+}
+
+export async function patchSiteControlsHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  checkRateLimit(`site-controls-update:${ctx.subject.id}`, 20, 60_000);
+  const body = await parseJsonBody(req, siteControlsBody);
+  return ok(await svc.updateSiteControls(ctx, body, meta(req)), "Site controls saved.");
+}
+
+export async function getPublicSiteStatusHandler() {
+  return ok(await svc.getPublicSiteStatus());
+}
+
+const adminSecurityBody = z.object({ mfaRequired: z.boolean(), reason: z.string().trim().max(300).optional() }).strict();
+
+export async function getAdminSecurityHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  return ok(await svc.getAdminSecurityView(ctx));
+}
+
+export async function patchAdminSecurityHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  checkRateLimit(`admin-security-update:${ctx.subject.id}`, 20, 60_000);
+  const body = await parseJsonBody(req, adminSecurityBody);
+  return ok(await svc.setAdminSecurity(ctx, body, meta(req)), "Admin security saved.");
+}

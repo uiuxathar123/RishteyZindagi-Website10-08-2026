@@ -177,7 +177,8 @@ export const WEIGHT_CATEGORIES: Array<{ key: string; label: string; hint: string
 export const PERMISSION_LABELS: Record<string, string> = {
   "admin.ping": "Reach the admin API",
   "users.view": "View member accounts",
-  "users.suspend": "Lift account suspensions",
+  "users.suspend": "Suspend members and lift suspensions",
+  "users.ban": "Ban or unban members",
   "profiles.verify": "Approve or reject profile verification",
   "reports.resolve": "Review and dismiss user reports",
   "reports.categories.manage": "Add, edit or disable report categories",
@@ -185,5 +186,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "platform.settings.manage": "Change platform settings (OTP, matching weights, gateways)",
   "payments.review": "Review payments, memberships and invoices",
   "audit.view": "View the platform audit log",
-  "staff.manage": "Manage staff accounts (no API yet)",
+  "staff.manage": "Manage staff accounts and roles",
+  "plans.manage": "Create and edit membership plans and entitlements",
+  "communities.manage": "Add, rename and retire community entries",
 };

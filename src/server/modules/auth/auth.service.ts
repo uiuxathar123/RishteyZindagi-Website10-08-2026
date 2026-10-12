@@ -31,7 +31,7 @@ import * as usersRepo from "@/server/modules/users/users.repository";
 import * as otpService from "@/server/modules/otp/otp.service";
 import { hashPassword, verifyPassword } from "@/server/lib/password";
 import { generateSessionToken, hashSessionToken, sessionExpiryDate } from "@/server/lib/session";
-import { AuthenticationError, AuthorizationError, ConflictError } from "@/server/lib/errors";
+import { AuthenticationError, AuthorizationError, ConflictError, ServiceUnavailableError } from "@/server/lib/errors";
 import * as platformSettings from "@/server/modules/platform-settings/platform-settings.service";
 import { record } from "@/server/modules/audit/audit.service";
 import { toPublicUser, type PublicUser } from "@/server/modules/users/users.dto";
@@ -95,6 +95,11 @@ export interface RegisterResult {
 }
 
 export async function register(input: RegisterInput, meta: RequestMeta): Promise<RegisterResult> {
+  // B18: the Super Admin can close new registrations (e.g. while migrating). Existing members are unaffected.
+  const signup = await platformSettings.getSignupSettings();
+  if (!signup.open) {
+    throw new ServiceUnavailableError(signup.closedMessage || "New registrations are temporarily closed. Please try again later.");
+  }
   const countryCode = input.countryCode ?? "+91";
   const clashes = await usersRepo.findByEmailOrMobile(input.email, input.mobileNumber);
   if (clashes.some((u) => u.email === input.email)) {

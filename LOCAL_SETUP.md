@@ -68,7 +68,7 @@ Edit both and replace every placeholder.
 
 Loaded only by `tests/setup.ts`; must point at the **test** database. See `.env.test.example` (`DATABASE_URL`, `NODE_ENV=test`, `AUTH_SECRET`, `SESSION_TTL_HOURS`, `APP_URL`, `API_URL`, 64-hex `PAYMENT_CREDENTIALS_ENCRYPTION_KEY`).
 
-## 5. Run migrations (12 migrations → 57 tables)
+## 5. Run migrations (19 migrations → 66 tables)
 
 ```bash
 npm run db:migrate
@@ -78,6 +78,8 @@ npm run db:migrate
 ```
 
 Migration `0011_pcp_production_completion.sql` (Production Completion Phase) adds five tables (`account_bans`, `job_runs`, `payment_refunds`, `payment_webhook_events`, `rate_limit_counters`) plus additive columns; nothing existing is dropped.
+
+Migration `0012_b18_admin_controls.sql` (B18) adds `platform_settings`, `communities.is_active`, `profiles.public_id` (+ sequence, backfilled), the three profile privacy columns, `users.notification_preferences`, and the `plans.manage` / `communities.manage` permissions. **Run `npm run db:migrate` (and `npm run db:seed`) on every existing database after pulling B18**, including your development database.
 
 ## 6. Seed reference data
 
@@ -98,6 +100,8 @@ npm run dev          # http://localhost:3000
 * API health: `/api/v1/health` (liveness) · `/api/v1/health/ready` (readiness)
 
 ## 8. Signing up locally (development OTP mode)
+
+> **B18:** a Super Admin can set *New-device login* and *Sign-up verification* to “OTP not required” (Admin → Platform Settings → OTP policy). The default is **required**. Passwords, account status and rate limits still apply in both modes; password reset, account recovery and payments always require their proof. Test both modes locally by flipping the policy and re-running the flow.
 
 No OTP vendor is connected, so by default a real signup cannot receive a code. For local work, turn on the project's own **development mode**:
 
@@ -129,7 +133,7 @@ It is only created when `NODE_ENV=development` and `SEED_DEV_SUPER_ADMIN=true`. 
 
 ```bash
 npx tsc --noEmit     # type-check
-npm test             # ~15–20 min on a 2-core machine (66 test files), needs the migrated + seeded TEST database
+npm test             # ~15–20 min on a 2-core machine (86 test files, 786 tests), needs the migrated + seeded TEST database
 npm run build        # production build (needs .env from §4 to exist — a build with no environment fails with "Invalid environment configuration")
 ```
 
@@ -153,6 +157,7 @@ npm run build && npm start
 | `npm run admin:create-super -- --email … --name "…"` | First Super Admin on a fresh database |
 | `npm run job -- --list` / `npm run job -- <name>` | Scheduled jobs (membership expiry, reminders, payment reconcile, deletion finalize, housekeeping) |
 | `npm run smoke:prod` / `smoke:gateway` | Real-HTTP smoke tests against a production build (see §17) |
+| `npm run smoke:b18` / `smoke:b18-ui` | B18 HTTP smoke (OTP policy both ways, search, plans, communities, permissions, member settings) and browser check (member / Super Admin / Staff Admin) |
 | `npm run smoke:ui` / `smoke:ui-gateway` | Headless-browser checks (need Playwright + Chromium, not repo dependencies) |
 | `scripts/backup-secure.sh`, `backup-offsite.ts`, `verify-restore.sh`, `restore-db.sh`, `backup-db.sh`, `deploy.sh` | Bash scripts (see `BACKUP_DR.md`, `DEPLOYMENT_PRODUCTION.md`) |
 
@@ -195,9 +200,86 @@ These start a production build of this app, a local protocol mock of each vendor
 npm run build
 export ADMIN_DATABASE_URL=postgresql://postgres:<password>@localhost:5432/postgres   # a role that may CREATE/DROP DATABASE; each run uses a throw-away database
 npm run smoke:prod       # 123 checks: auth, OTP via mock SMTP (STARTTLS), RBAC, IDOR, headers, rate limits, jobs, deletion/recovery, moderation, staff
+npm run smoke:b18       # 114 checks: B18 features end to end, incl. OTP-required AND OTP-not-required configurations
 npm run smoke:gateway    # 52 checks: Razorpay + PhonePe orders, signatures, webhooks, refunds, gateway switching
 # browser checks (install Playwright without saving it to package.json):
 npm i --no-save playwright && PLAYWRIGHT_MODULE=playwright PLAYWRIGHT_CHROMIUM=/path/to/chromium npm run smoke:ui
 ```
 
 Logs and screenshots go to the directory named by `SMOKE_LOG_DIR` / `SMOKE_SHOTS_DIR` (see the header of `scripts/smoke/run-smoke.sh`).
+
+
+## Razorpay TEST mode + SMTP e-mail OTP
+
+See **`PROVIDER_TEST_SETUP.md`** for the variable names, dashboard steps, `npm run check:providers`, safety rails and test commands.
+
+
+## Git
+
+See **`GIT_HANDOVER.md`** — first-commit checklist and the secret scanner (`npm run scan:secrets`, `npm run hooks:install`).
+
+## 18. Scheduling `member-digest` and `membership-dunning` (B19)
+
+The app has no built-in scheduler. Nothing runs until you schedule it. Both jobs are safe to run by hand first:
+
+```bash
+npm run job -- --list                 # shows every job and its suggested schedule
+npm run job -- member-digest          # one run now; prints a JSON result (sent / empty / failed / skipped)
+npm run job -- membership-dunning
+```
+
+Exit code is 0 on success (including "skipped"), 1 if the job failed.
+
+| Job | Suggested schedule | What it needs |
+|---|---|---|
+| `member-digest` | `30 3 * * 1` (Mondays 03:30) | SMTP configured (`SMTP_HOST`, `EMAIL_FROM`, …), the digest master switch on (Admin → Site controls), and members who opted in under Settings → Notifications. With SMTP missing it **skips** and says so; it does not fake a send. |
+| `membership-dunning` | `15 * * * *` (hourly at :15) | Nothing external. It only reads/updates the `renewal_cycles` table and creates in-app notices. |
+
+Example crontab (Linux/macOS), using the CLI option from `DEPLOYMENT_PRODUCTION.md` §6:
+
+```
+CRON_TZ=Asia/Kolkata
+30 9 * * 1  cd /srv/rishteyzindagi && npm run job -- member-digest
+15 * * * *  cd /srv/rishteyzindagi && npm run job -- membership-dunning
+```
+
+**Timezone.** The schedule itself is interpreted in whatever timezone your scheduler uses (cron uses the server's, unless it supports `CRON_TZ`; most containers are UTC, where `30 3 * * 1` means 09:00 India time on Monday). Inside the app, "this week" for the digest is the ISO week in **Asia/Kolkata**, so pick a time well away from Monday 00:00 India time (Sunday 18:30 UTC). Dunning measures elapsed time (3 days to the follow-up, 10 days to close) with the database clock, so its timezone does not matter.
+
+**Duplicate runs.** Running a job twice, or from two schedulers at once, is safe:
+
+* `member-digest` claims one row per member per ISO week (`digest_log`) before sending, so nobody gets two digests in a week. A send that failed is retried on the next run in the same week; a member with nothing to report is marked "empty" and is not retried that week. A run that was interrupted mid-send is picked up after one hour.
+* `membership-dunning` moves each renewal cycle forward with conditional updates and a per-membership dedupe key, so each member receives at most one follow-up.
+* Every job also takes a Postgres advisory lock; a second concurrent run is skipped.
+
+Windows: use Task Scheduler to run `npm run job -- member-digest` in the project folder weekly and `npm run job -- membership-dunning` hourly.
+
+## Local helpers: "I can't sign in / sign up / see profiles in search"
+
+Three commands (local development only — they refuse to run when `NODE_ENV=production` or when `DATABASE_URL` is not on this machine):
+
+```bash
+npm run dev:doctor                 # read-only report: DB, Super Admin, SMTP/OTP, and exactly why profiles are or are not in search
+npm run dev:setup                  # runs migrate/seed if needed, resets the dev Super Admin (password = SEED_DEV_SUPER_ADMIN_PASSWORD in .env),
+                                   # creates 4 fake test members with COMPLETE, approved profiles + a photo + an active membership
+npm run dev:setup -- --no-otp      # same, and also switches the sign-up and new-device OTP checks OFF (no SMTP needed)
+npm run dev:otp -- off             # switch those two OTP checks off / back on later:  npm run dev:otp -- on
+```
+
+Test members (created by `dev:setup`, password `TestPass@12345`): `test.priya@example.com`, `test.aisha@example.com`, `test.rahul@example.com`, `test.imran@example.com`.
+
+Why search can be empty: a profile appears only when it is **complete, has a photo, is approved** (automatic unless "manual approval" is on in Admin → Site controls) **and visible**, and the member's account is ACTIVE. `dev:doctor` counts profiles stuck in each state.
+
+The same OTP switch is available in the admin panel: Admin → Settings → OTP policy ("Sign-up contact verification"). With it off, new accounts are created with e-mail/mobile **unverified** — keep it on for production.
+
+### Registration OTP switch (Super Admin)
+
+Sign in at `/admin/login` → **Platform Settings** (`/admin/super/settings`) → card **"Registration OTP verification"**.
+
+- **ON** (default): new members must enter the one-time code. If e-mail delivery is not configured the sign-up form shows
+  "Email OTP delivery is not configured. Set SMTP_HOST and EMAIL_FROM." and nothing is bypassed.
+- **OFF**: new accounts are created without a code and nothing is e-mailed (e-mail/mobile stay marked unverified).
+  Switching OFF asks for a short reason (kept in the audit log); switching back ON needs none.
+
+The value is stored in the database (`platform_settings`, key `otp.policy`) and survives restarts.
+`npm run dev:otp -- off|on` and `npm run dev:setup -- --no-otp` change the same setting (registration only;
+add `--all` to also switch the new-device login check). Password reset, admin sign-in/MFA and contact changes always need their code.

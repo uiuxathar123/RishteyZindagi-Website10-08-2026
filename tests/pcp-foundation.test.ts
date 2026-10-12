@@ -4,8 +4,6 @@
  * two real OS processes that share the database.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import path from "path";
 import { sql, eq, desc } from "drizzle-orm";
 
@@ -26,8 +24,8 @@ import { GET as listAudit } from "@/app/api/v1/admin/audit-logs/route";
 import { __resetRateLimitsForTests } from "@/server/middleware/rate-limit";
 import { resetTransactionalTables, resetAdminUsers } from "./helpers/reset-db";
 import { jreq, resetPcpTables, createAdmin } from "./helpers/pcp";
+import { runTsx } from "./helpers/run-tsx";
 
-const run = promisify(execFile);
 const CRON = { authorization: `Bearer ${process.env.CRON_SECRET}` };
 
 beforeEach(async () => {
@@ -62,8 +60,8 @@ describe("PCP shared rate-limit store (postgres)", () => {
     const env = { ...process.env, DATABASE_URL: dbUrl, RATE_LIMIT_STORE: "postgres" } as NodeJS.ProcessEnv;
     const key = "t:multi-process";
     const [a, b] = await Promise.all([
-      run("npx", ["tsx", script, key, "20", "25"], { env, cwd: path.resolve(__dirname, "..") }),
-      run("npx", ["tsx", script, key, "20", "25"], { env, cwd: path.resolve(__dirname, "..") }),
+      runTsx([script, key, "20", "25"], { env, cwd: path.resolve(__dirname, ".."), encoding: "utf8" }),
+      runTsx([script, key, "20", "25"], { env, cwd: path.resolve(__dirname, ".."), encoding: "utf8" }),
     ]);
     const allowedA = Number(a.stdout.trim().split("\n").pop());
     const allowedB = Number(b.stdout.trim().split("\n").pop());

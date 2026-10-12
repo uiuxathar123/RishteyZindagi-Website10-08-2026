@@ -131,11 +131,11 @@ export function CurrentMembershipCard({
         <div className="mt-5 flex items-start justify-between gap-4 border-t border-rz-border pt-4">
           <div className="min-w-0">
             <p id="auto-renew-label" className="text-sm font-semibold text-rz-navy">
-              Auto-renew
+              Renewal reminders
             </p>
             <p className="mt-0.5 text-xs leading-relaxed text-rz-muted">
-              {m.autoRenew ? "Your preference is on." : "Your preference is off."} This saves your preference only: automatic
-              charges are not run on this server yet, so you&apos;ll still renew manually before{" "}
+              {m.autoRenew ? "Renewal reminders are on." : "Renewal reminders are off."} We&apos;ll remind you before this ends and follow
+              up once if it lapses. Your card is never charged automatically: you renew from this page before{" "}
               {formatDate(m.expiresAt)}. Turning it off never ends your current period.
             </p>
             {toggle.error && (

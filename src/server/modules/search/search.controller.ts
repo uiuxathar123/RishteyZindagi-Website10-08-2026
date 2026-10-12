@@ -76,6 +76,12 @@ const searchQuerySchema = z
       .toUpperCase()
       .regex(/^[A-Z]{3}$/, "incomeCurrency must be a 3-letter ISO 4217 code")
       .optional(),
+    profileId: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^RZ\d{8}$/, "profileId must look like RZ12345678")
+      .optional(),
     page: z.number().int().min(1).optional(),
     pageSize: z.number().int().min(1).max(searchService.MAX_PAGE_SIZE).optional(),
     // §18: only these two deterministic fields — never a "smart ranking"
@@ -132,6 +138,7 @@ export async function searchProfilesHandler(req: NextRequest) {
         "minIncome",
         "maxIncome",
         "incomeCurrency",
+        "profileId",
         "page",
         "pageSize",
         "sortBy",
@@ -160,6 +167,7 @@ export async function searchProfilesHandler(req: NextRequest) {
     minIncome: parseInt10(sp.get("minIncome"), "minIncome"),
     maxIncome: parseInt10(sp.get("maxIncome"), "maxIncome"),
     incomeCurrency: sp.get("incomeCurrency") ?? undefined,
+    profileId: sp.get("profileId") ?? undefined,
     page: parseInt10(sp.get("page"), "page"),
     pageSize: parseInt10(sp.get("pageSize"), "pageSize"),
     sortBy: sp.get("sortBy") ?? undefined,
@@ -191,6 +199,7 @@ export async function searchProfilesHandler(req: NextRequest) {
       minIncome: q.minIncome,
       maxIncome: q.maxIncome,
       incomeCurrency: q.incomeCurrency,
+      profileId: q.profileId,
     },
     page: q.page,
     pageSize: q.pageSize,
@@ -199,4 +208,11 @@ export async function searchProfilesHandler(req: NextRequest) {
   });
 
   return ok(page);
+}
+
+/** B18: `GET /search/access` — what the caller may use (a UI hint; `/search/profiles` enforces independently). */
+export async function searchAccessHandler(req: NextRequest) {
+  const viewer = await tryAuthenticate(req);
+  checkRateLimit(`search-access:${viewer ? viewer.subject.id : ipKey(req)}`, 60, 60_000);
+  return ok(await searchService.getSearchAccess(viewer));
 }

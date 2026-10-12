@@ -125,14 +125,23 @@ function GatewayCard({
           <h3 className="font-serif text-base font-semibold text-rz-navy">{gateway.label}</h3>
           <Badge tone={gateway.isActive ? "success" : "neutral"}>{gateway.isActive ? "Active" : "Inactive"}</Badge>
         </div>
-        {gateway.mode && <Badge tone={gateway.mode === "live" ? "maroon" : "gold"}>{gateway.mode === "live" ? "Live mode" : "Test mode"}</Badge>}
+        {(() => {
+          // The mode the KEY declares wins over the label an admin saved.
+          const shown = gateway.detectedMode === "test" || gateway.detectedMode === "live" ? gateway.detectedMode : gateway.mode;
+          return shown ? <Badge tone={shown === "live" ? "maroon" : "gold"}>{shown === "live" ? "Live key" : "Test key"}</Badge> : null;
+        })()}
       </div>
+      {gateway.problem && (
+        <p role="alert" className="mt-3 rounded-md border border-rz-danger/30 bg-rz-danger/5 px-3 py-2 text-[13px] text-rz-danger">
+          {gateway.problem}
+        </p>
+      )}
 
       <dl className="mt-3 space-y-1.5 text-[13px]">
         <div className="flex justify-between gap-3">
           <dt className="text-rz-muted">Credentials</dt>
           <dd className="font-medium text-rz-text">
-            {gateway.configured
+            {gateway.configured || gateway.problem
               ? gateway.credentialSource === "admin"
                 ? "Saved in admin panel"
                 : "Set in server environment"

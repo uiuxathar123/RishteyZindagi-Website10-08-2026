@@ -181,15 +181,15 @@ async function main() {
   check("P4 save Razorpay credentials → 200 and the response contains no secret", r.status === 200 && !r.text.includes(FAKE_SECRET) && !r.text.includes("smoke-fake-webhook-secret"), r.text.slice(0, 240));
   r = await owner.get("/bff/admin/payments/config");
   const rz = r.data?.gateways?.find((g: any) => g.key === "RAZORPAY");
-  check("P5 GET shows Razorpay configured from the admin panel with stored field NAMES only", rz?.configured === true && rz?.credentialSource === "admin" && Array.isArray(rz?.storedFields) && !r.text.includes(FAKE_SECRET), JSON.stringify(rz).slice(0, 240));
+  check("P5 GET shows the saved TEST key as REFUSED in production (detectedMode=test, a problem is reported, not 'configured'), stored field NAMES only, no secret", rz?.configured === false && rz?.detectedMode === "test" && /TEST key/.test(rz?.problem ?? "") && rz?.credentialSource === "admin" && Array.isArray(rz?.storedFields) && rz.storedFields.length >= 2 && !r.text.includes(FAKE_SECRET), JSON.stringify(rz).slice(0, 240));
   const cipher = (await db.query("select config::text c from payment_gateways where name = 'Razorpay'")).rows[0]?.c ?? "";
   check("P6 the database holds ciphertext, not the secret", cipher.length > 20 && !cipher.includes(FAKE_SECRET) && !cipher.includes("smoke-fake-webhook-secret"), cipher.slice(0, 120));
   r = await owner.patch("/bff/admin/payments/config", { activeGateway: "RAZORPAY" });
-  check("P7 activate Razorpay → 200, exactly one active", r.status === 200 && r.data?.gateways?.filter((g: any) => g.isActive).length === 1, r.text.slice(0, 160));
+  check("P7 activating Razorpay with a TEST key in production is refused (409): fail closed", r.status === 409 && /TEST key/.test(r.text), r.text.slice(0, 160));
   r = await owner.patch("/bff/admin/payments/config", { activeGateway: "CASHFREE" });
   check("P8 an unsupported gateway key is rejected (400)", r.status === 400, String(r.status));
   const act = (await db.query("select name from payment_gateways where is_active")).rows.map((x) => x.name);
-  check("P9 the database agrees: exactly one active gateway", act.length === 1 && act[0] === "Razorpay", JSON.stringify(act));
+  check("P9 the database agrees: still exactly one active gateway (the seeded default); the refused activation changed nothing", act.length === 1, JSON.stringify(act));
 
   // ------------------------------------------------------------------ 7. webhooks: authentication
   r = await anon.post("/api/v1/webhooks/razorpay", { event: "payment.captured" }, { noOrigin: true });

@@ -6852,3 +6852,19 @@ Read `PRODUCTION_COMPLETION_AUDIT.md` (written before any code) for the gap anal
 * The B8 duplicate-checkout guard (15 min per plan) still applies; Razorpay members re-enter an unpaid order through the resume endpoint, PhonePe members currently wait (limitation P2-9).
 * Production ignores `RAZORPAY_API_BASE`, `PHONEPE_*_BASE`, `FAST2SMS_API_BASE` and `PAYMENT_PROVIDER_MODE`, so configuration can never point production at a look-alike host or enable a mock gateway.
 * Nothing here has been run against a real vendor. See the Release Readiness Matrix for per-capability status.
+
+---
+
+## 63. B18 — Pending Features Completion & Full Admin Integration
+
+Scope, audit and decisions: `B18_AUDIT.md`. Final status per feature: `B18_FINAL_REPORT.md` / `B18_RELEASE_READINESS_MATRIX.md`. Role-to-endpoint table: `B18_PERMISSION_MATRIX.md`. Endpoint details: `API_REFERENCE.md` §21.
+
+**Migration** `drizzle/0012_b18_admin_controls.sql` (hand-completed; apply with `npm run db:migrate`): `platform_settings` (key/value jsonb + `updated_by_admin_id`), `communities.is_active`, `profiles.public_id` (sequence `profile_public_id_seq` from 10000001, backfilled in creation order, unique, `RZ`+8 digits), `profiles.profile_visibility / photo_visibility / show_last_active`, `users.notification_preferences`, permissions `plans.manage` + `communities.manage` (granted to `SUPER_ADMIN`), and removal of the retired `unlimitedInterests` / `shortlist` plan feature flags. Re-runnable seed: `plans` are inserted `ON CONFLICT DO NOTHING`, so admin edits to plans are never overwritten.
+
+**Owner decisions applied:** (1) only **advanced search** is a plan entitlement (interests/shortlist stay open to every member; the old plan bullets were re-worded or retired); (2) the OTP-less option covers **new-device login verification** and **sign-up contact verification** only.
+
+**OTP policy.** `otp.policy` in `platform_settings`, read through `isOtpRequired(workflow)` — any missing/corrupt value, unknown workflow, or read error resolves to `OTP_REQUIRED`. `OTP_NOT_REQUIRED` never removes the password check, account-status check, session creation, rate limiting or audit; it only skips the extra code on the two configurable workflows (signup: a policy ticket is issued by the server in place of the OTP ticket and `set-password` is still required). The provider (EMAIL or Fast2SMS, exactly one active) is a separate setting and is untouched by the policy. Only `SUPER_ADMIN` can read or change the policy; every change is audited (actor, time, previous, new, optional reason) and the Admin Panel shows who/when last changed it.
+
+**Modules added:** `platform-settings`, `admin/{plans,communities,security-events,reconcile}-admin`, `account/member-settings`, `profiles/privacy.ts` (single decision point for hidden profile / photo / last-active so search, recommendations, profile page and photo route cannot disagree). **Behavioural changes to existing modules:** search (profile-ID filter, sort/page-size settings, entitlement gate, hidden exclusion), recommendations (hidden exclusion, photo/last-active extras), interactions (cannot approach hidden member), profiles (hidden/photo rules, retired-community check), notifications (`notify()` honours per-channel opt-outs for non-essential messages; `essential: true` bypasses), authenticate (throttled `last_active_at` write), seed (non-destructive plans), `AuthorizationError` can carry `details`.
+
+**Verification:** `tests/b18-*.test.ts` (otp-policy, search, plans, communities, security-events, reconcile, permission-matrix, escalation, member-settings). The permission-matrix test fails the build if an admin route is added without a rule, a rule is stale, a role holding only the named permission is refused, or a role holding every other permission is admitted.

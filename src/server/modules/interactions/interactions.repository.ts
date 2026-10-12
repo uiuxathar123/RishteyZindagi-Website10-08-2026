@@ -24,6 +24,8 @@ export interface TargetAccountInfo {
   accountStatus: string;
   profileId: string | null;
   profileStatus: string | null;
+  profileVisibility: string | null;
+  approvalStatus: string | null;
 }
 
 /** Looks up the minimal account+profile info every interaction eligibility
@@ -36,6 +38,8 @@ export async function findTargetAccountInfo(userId: string): Promise<TargetAccou
       accountStatus: users.status,
       profileId: profiles.id,
       profileStatus: profiles.profileStatus,
+      profileVisibility: profiles.profileVisibility,
+      approvalStatus: profiles.approvalStatus,
     })
     .from(users)
     .leftJoin(profiles, eq(profiles.userId, users.id))
@@ -59,6 +63,22 @@ export async function isBlockedEitherDirection(userAId: string, userBId: string)
     )
     .limit(1);
   return !!row;
+}
+
+/** Subset of `candidateUserIds` that has a block with `viewerUserId` in either direction (one query). */
+export async function blockedUserIdsAmong(viewerUserId: string, candidateUserIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(candidateUserIds)].filter((i) => i !== viewerUserId);
+  if (ids.length === 0) return new Set();
+  const rows = await db
+    .select({ blocker: blocks.blockerUserId, blocked: blocks.blockedUserId })
+    .from(blocks)
+    .where(
+      or(
+        and(eq(blocks.blockerUserId, viewerUserId), inArray(blocks.blockedUserId, ids)),
+        and(eq(blocks.blockedUserId, viewerUserId), inArray(blocks.blockerUserId, ids))
+      )
+    );
+  return new Set(rows.map((r) => (r.blocker === viewerUserId ? r.blocked : r.blocker)));
 }
 
 // --- Likes -------------------------------------------------------------

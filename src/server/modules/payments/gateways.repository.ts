@@ -3,9 +3,12 @@
  * (never read or written by any code through B7) that this phase turns
  * into real, admin-managed gateway configuration.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { paymentGateways } from "@/server/db/schema";
+
+/** Arbitrary constant key for the advisory lock that serialises gateway switches. */
+const GATEWAY_SWITCH_LOCK = 7_180_001;
 
 export type PaymentGatewayRow = typeof paymentGateways.$inferSelect;
 
@@ -67,6 +70,11 @@ export async function updateConfig(id: string, config: GatewayConfig): Promise<P
  */
 export async function setActiveGateway(id: string): Promise<PaymentGatewayRow> {
   return db.transaction(async (tx) => {
+    // B18: serialise concurrent switches. Two transactions updating every row in different physical
+    // order can deadlock (Postgres aborts one after deadlock_timeout, which surfaced as an intermittent
+    // 500 in [cfg-concurrent-switch] on a loaded machine). A transaction-scoped advisory lock makes the
+    // second switch wait, then apply on top of the first — "last committed wins, always exactly one".
+    await tx.execute(sql`select pg_advisory_xact_lock(${GATEWAY_SWITCH_LOCK})`);
     await tx.update(paymentGateways).set({ isActive: false });
     const [row] = await tx.update(paymentGateways).set({ isActive: true }).where(eq(paymentGateways.id, id)).returning();
     return row;

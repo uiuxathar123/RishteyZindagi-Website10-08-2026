@@ -146,3 +146,10 @@ export async function resolveDestination(userId: string, channel: NotificationCh
   if (channel === "WHATSAPP") return `${user.countryCode}${user.mobileNumber}`;
   return "";
 }
+
+/** B18: the member's per-channel opt-out (users.notification_preferences; a missing key means enabled). */
+export async function isChannelEnabled(userId: string, channel: "EMAIL" | "PUSH" | "WHATSAPP"): Promise<boolean> {
+  const [row] = await db.select({ prefs: users.notificationPreferences }).from(users).where(eq(users.id, userId)).limit(1);
+  const prefs = (row?.prefs ?? {}) as Record<string, unknown>;
+  return prefs[channel] !== false;
+}

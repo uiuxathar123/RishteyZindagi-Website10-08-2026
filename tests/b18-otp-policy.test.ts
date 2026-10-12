@@ -1,5 +1,5 @@
 /**
- * B18 — admin-controlled OTP requirement policy (OTP_REQUIRED / OTP_NOT_REQUIRED).
+ * B18 — admin-controlled OTP requirement policy (OTP_REQUIRED / OTP_NOT_REQUIRED) and the sign-up switch.
  * Provider selection (EMAIL | FAST2SMS_SMS) is a separate setting and is asserted to be untouched.
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
@@ -14,6 +14,7 @@ import { getDevOtpCode } from "@/server/modules/otp/providers/dev.provider";
 
 import { GET as getPolicy, PATCH as patchPolicy } from "@/app/api/v1/admin/otp/policy/route";
 import { PATCH as patchProvider } from "@/app/api/v1/admin/otp/provider/route";
+import { GET as getSettings, PATCH as patchSettings } from "@/app/api/v1/admin/platform-settings/route";
 import { POST as login } from "@/app/api/v1/auth/login/route";
 import { POST as verifyDevice } from "@/app/api/v1/auth/verify-device/route";
 import { POST as register } from "@/app/api/v1/auth/register/route";
@@ -283,5 +284,36 @@ describe("sensitive flows are never OTP-less", () => {
     expect((await verifyLoginOtp(req(`${URL_}/auth/verify-login-otp`, { email: m.email, code: "000000" }, { deviceId: "otp-dev" }))).status).toBe(401);
     const code = getDevOtpCode(m.email, "LOGIN")!;
     expect((await verifyLoginOtp(req(`${URL_}/auth/verify-login-otp`, { email: m.email, code }, { deviceId: "otp-dev" }))).status).toBe(200);
+  });
+});
+
+describe("sign-up switch and platform settings", () => {
+  it("[signup-closed] a Super Admin can close registrations; existing members still sign in; reopening restores sign-up", async () => {
+    const m = await createVerifiedMember("closed");
+    const patch = (body: unknown, token = sup.token) => patchSettings(jreq(`${URL_}/admin/platform-settings`, { method: "PATCH", body, token }));
+    expect((await patch({ signup: { open: false, closedMessage: "Closed for maintenance." } })).status).toBe(200);
+    const r = await register(req(`${URL_}/auth/register`, { name: "Late Joiner", email: `late-${Date.now()}@example.com`, mobileNumber: "9123456780" }));
+    expect(r.status).toBe(503);
+    expect(JSON.stringify(await r.json())).toContain("Closed for maintenance.");
+    expect((await doLogin(m.email, "correcthorsebattery", m.deviceId)).status).toBe(200);
+    expect((await patch({ signup: { open: true } })).status).toBe(200);
+    expect((await register(req(`${URL_}/auth/register`, { name: "Late Joiner", email: `late2-${Date.now()}@example.com`, mobileNumber: "9123456781" }))).status).toBe(201);
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, "settings.signup_changed"));
+    expect(rows.length).toBe(2);
+    expect(rows[0].metadata).toMatchObject({ previous: { open: true }, new: { open: false, closedMessage: "Closed for maintenance." } });
+  });
+
+  it("[settings-authz-validation] needs platform.settings.manage; invalid ranges and unknown keys rejected", async () => {
+    const patch = (body: unknown, token?: string) => patchSettings(jreq(`${URL_}/admin/platform-settings`, { method: "PATCH", body, token }));
+    expect((await patch({ signup: { open: false } })).status).toBe(401);
+    expect((await patch({ signup: { open: false } }, staff.token)).status).toBe(403);
+    expect((await getSettings(jreq(`${URL_}/admin/platform-settings`, { token: staff.token }))).status).toBe(403);
+    expect((await patch({ search: { maxPageSize: 500 } }, sup.token)).status).toBe(400);
+    expect((await patch({ search: { defaultPageSize: 40, maxPageSize: 20 } }, sup.token)).status).toBe(400);
+    expect((await patch({ search: { bogus: 1 } }, sup.token)).status).toBe(400);
+    expect((await patch({}, sup.token)).status).toBe(400);
+    const v = (await (await getSettings(jreq(`${URL_}/admin/platform-settings`, { token: sup.token }))).json()).data;
+    expect(v.search).toEqual({ defaultPageSize: 20, maxPageSize: 50, enforceAdvancedSearchEntitlement: true });
+    expect(v.signup.open).toBe(true);
   });
 });

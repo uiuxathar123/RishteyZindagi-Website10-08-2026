@@ -4,8 +4,8 @@ import { SlidersHorizontal, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
-import { FilterPanel } from "./FilterPanel";
-import { PAGE_SIZE, SORT_OPTIONS, activeFilterCount, parseFilters, toQuery, toSearchString, type SearchFilters } from "./searchFilters";
+import { FilterPanel, type AdvancedAccess } from "./FilterPanel";
+import { PAGE_SIZE, SORT_OPTIONS, activeFilterCount, advancedFilterCount, parseFilters, toQuery, toSearchString, withoutAdvanced, type SearchFilters } from "./searchFilters";
 import { Pager } from "@/components/profile/Pager";
 import { ProfileCard } from "@/components/profile/ProfileCard";
 import { fromSearchItem } from "@/components/profile/cardModel";
@@ -29,6 +29,17 @@ export function SearchClient() {
     (signal) => api.get<Page<SearchItem>>("/search/profiles", { query: toQuery(filters, { forApi: true }), signal }),
     [apiKey]
   );
+
+  // Which filters this caller may use (a UI hint — the server enforces the rule on every search).
+  const accessState = useAsync((signal) => api.get<{ audience: "visitor" | "member"; advancedSearch: boolean }>("/search/access", { signal }), []);
+  const here0 = toSearchString(filters);
+  const access: AdvancedAccess = {
+    allowed: accessState.data ? accessState.data.advancedSearch : true, // unknown yet → don't flash a lock; a 403 is handled below
+    audience: accessState.data?.audience ?? "member",
+    loginHref: `/login?next=${encodeURIComponent(here0 ? `/search?${here0}` : "/search")}`,
+  };
+  const entitlementBlocked =
+    !!results.error && results.error.status === 403 && results.error.details.some((d) => d.path === "entitlement");
 
   const go = (next: SearchFilters) => {
     const s = toSearchString(next);
@@ -83,7 +94,7 @@ export function SearchClient() {
             <span className="text-rz-muted transition-transform group-open:rotate-180">⌄</span>
           </summary>
           <div className="border-t border-rz-border p-4">
-            <FilterPanel idPrefix="m" value={filters} onApply={go} onReset={reset} />
+            <FilterPanel idPrefix="m" value={filters} onApply={go} onReset={reset} access={access} />
           </div>
         </details>
 
@@ -92,7 +103,7 @@ export function SearchClient() {
             <p className="mb-4 flex items-center gap-2 font-serif text-base font-semibold text-rz-navy">
               <SlidersHorizontal className="h-4 w-4" /> Filters
             </p>
-            <FilterPanel idPrefix="d" value={filters} onApply={go} onReset={reset} />
+            <FilterPanel idPrefix="d" value={filters} onApply={go} onReset={reset} access={access} />
           </div>
         </aside>
 
@@ -111,7 +122,24 @@ export function SearchClient() {
             </div>
           )}
 
-          {data === null && results.loading ? (
+          {entitlementBlocked ? (
+            <div role="alert" className="rounded-lg border border-rz-gold/40 bg-rz-champagne/50 p-6 text-center" data-testid="advanced-search-blocked">
+              <h2 className="font-serif text-lg font-semibold text-rz-navy">Advanced search needs a plan</h2>
+              <p className="mt-1 text-sm text-rz-text">
+                {results.error?.friendlyMessage} {advancedFilterCount(filters) > 0 ? `This link uses ${advancedFilterCount(filters)} advanced filter${advancedFilterCount(filters) === 1 ? "" : "s"}.` : ""}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                <Button variant="outline" size="sm" onClick={() => go(withoutAdvanced(filters))}>
+                  Search without them
+                </Button>
+                {access.audience === "visitor" ? (
+                  <Link href={access.loginHref} className="rz-focus text-sm font-semibold text-rz-maroon underline underline-offset-2">Log in</Link>
+                ) : (
+                  <Link href="/membership" className="rz-focus text-sm font-semibold text-rz-maroon underline underline-offset-2">See plans</Link>
+                )}
+              </div>
+            </div>
+          ) : data === null && results.loading ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Loading profiles">
               {Array.from({ length: 6 }).map((_, i) => (
                 <ProfileCardSkeleton key={i} />

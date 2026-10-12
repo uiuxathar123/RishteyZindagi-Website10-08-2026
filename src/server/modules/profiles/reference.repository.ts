@@ -5,7 +5,7 @@
  * open-ended and populated on demand via findOrCreate*). Nothing above
  * this file queries these tables directly.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import {
   religions,
@@ -58,7 +58,7 @@ export async function listCommunitiesForReligion(religionId: string): Promise<Lo
   return db
     .select({ id: communities.id, name: communities.name })
     .from(communities)
-    .where(eq(communities.religionId, religionId))
+    .where(and(eq(communities.religionId, religionId), eq(communities.isActive, true)))
     .orderBy(communities.name);
 }
 
@@ -141,6 +141,12 @@ export async function cityBelongsToCountry(cityId: string, countryId: string): P
   return rows.length > 0;
 }
 
+/** B18: a retired community can't be newly chosen (profiles that already have it keep it). */
+export async function communityIsActive(communityId: string): Promise<boolean> {
+  const [row] = await db.select({ isActive: communities.isActive }).from(communities).where(eq(communities.id, communityId)).limit(1);
+  return !!row?.isActive;
+}
+
 export async function communityBelongsToReligion(communityId: string, religionId: string): Promise<boolean> {
   const rows = await db
     .select()
@@ -183,4 +189,43 @@ export async function findOrCreateCommunity(name: string, religionId: string): P
 
   const [row] = await db.insert(communities).values({ name: trimmed, religionId }).returning({ id: communities.id, name: communities.name });
   return row;
+}
+
+// --- Batched lookups (used by the list-card summaries endpoint) ----------------
+
+export interface LookupIdSets {
+  maritalStatus: string[];
+  religion: string[];
+  community: string[];
+  motherTongue: string[];
+  education: string[];
+  profession: string[];
+  country: string[];
+  city: string[];
+}
+
+export type LookupMaps = { [K in keyof LookupIdSets]: Map<string, LookupRow> };
+
+async function namesByIds(
+  table: typeof religions | typeof motherTongues | typeof educations | typeof professions | typeof countries | typeof cities | typeof maritalStatuses | typeof communities,
+  ids: string[]
+): Promise<Map<string, LookupRow>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db.select({ id: table.id, name: table.name }).from(table as typeof religions).where(inArray(table.id, ids));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** One query per lookup table that is actually needed (instead of one per profile per table). */
+export async function getLookupMapsByIds(ids: LookupIdSets): Promise<LookupMaps> {
+  const [maritalStatus, religion, community, motherTongue, education, profession, country, city] = await Promise.all([
+    namesByIds(maritalStatuses, ids.maritalStatus),
+    namesByIds(religions, ids.religion),
+    namesByIds(communities, ids.community),
+    namesByIds(motherTongues, ids.motherTongue),
+    namesByIds(educations, ids.education),
+    namesByIds(professions, ids.profession),
+    namesByIds(countries, ids.country),
+    namesByIds(cities, ids.city),
+  ]);
+  return { maritalStatus, religion, community, motherTongue, education, profession, country, city };
 }

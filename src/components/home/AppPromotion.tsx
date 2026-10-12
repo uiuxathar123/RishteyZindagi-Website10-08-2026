@@ -30,16 +30,19 @@ export function AppPromotion() {
               </span>
             ))}
           </div>
-          <a
-            href="#"
-            className="rz-focus inline-flex items-center gap-3 rounded-lg border border-white/20 bg-white/5 px-5 py-3 transition-colors hover:bg-white/10"
+          {/* B18: was an <a href="#"> Google Play button that went nowhere. There is no published app, so this is
+              an honest, non-interactive notice rather than a control that looks clickable. */}
+          <div
+            role="note"
+            aria-label="Android app coming soon — not yet available"
+            className="inline-flex items-center gap-3 rounded-lg border border-white/20 bg-white/5 px-5 py-3"
           >
             <Smartphone className="h-7 w-7" strokeWidth={1.5} />
             <span className="text-left">
-              <span className="block text-[11px] text-white/60">Get it on</span>
-              <span className="block text-sm font-semibold">Google Play</span>
+              <span className="block text-[11px] text-white/60">Android app</span>
+              <span className="block text-sm font-semibold">Coming soon</span>
             </span>
-          </a>
+          </div>
         </div>
 
         <div className="relative mx-auto w-full max-w-[260px]">

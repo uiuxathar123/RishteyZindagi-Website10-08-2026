@@ -39,7 +39,12 @@ export interface GatewayConfigView {
   /** Credentials needed to attempt a real call exist (admin-saved or environment). Says nothing about whether the vendor accepts them — use test-connection. */
   configured: boolean;
   credentialSource: "admin" | "environment" | "none";
+  /** The mode an admin saved as a label (may be null for environment-supplied keys). Display only. */
   mode: "test" | "live" | null;
+  /** The mode the KEY itself declares (rzp_test_ / rzp_live_ prefix); null when no key exists or for PhonePe. This is what the guard uses. */
+  detectedMode: "test" | "live" | "unknown" | null;
+  /** Why the stored/configured credentials are refused in THIS environment (e.g. a test key in production); null when usable. Never contains key material. */
+  problem: string | null;
   /** Which write-only fields currently have a stored value (never the values). */
   storedFields: string[];
   webhook: { configured: boolean; url: string };
@@ -64,10 +69,14 @@ async function viewFor(key: GatewayKey, row: PaymentGatewayRow): Promise<Gateway
   let configured = false;
   let webhookConfigured = false;
   let envOnly = false;
+  let detectedMode: GatewayConfigView["detectedMode"] = null;
+  let problem: string | null = null;
   try {
     if (key === "RAZORPAY") {
       const c = await loadRazorpayCredentials();
-      configured = Boolean(c);
+      configured = Boolean(c) && !c?.problem;
+      detectedMode = c?.mode ?? null;
+      problem = c?.problem ?? null;
       webhookConfigured = Boolean(c?.webhookSecret);
       envOnly = configured && !(cfg.encrypted?.apiKey && cfg.encrypted?.apiSecret);
     } else {
@@ -87,8 +96,10 @@ async function viewFor(key: GatewayKey, row: PaymentGatewayRow): Promise<Gateway
     isActive: row.isActive,
     status: row.isActive ? "ACTIVE" : "INACTIVE",
     configured,
-    credentialSource: !configured ? "none" : envOnly ? "environment" : "admin",
+    credentialSource: !configured && !problem ? "none" : envOnly ? "environment" : "admin",
     mode: cfg.mode ?? null,
+    detectedMode,
+    problem,
     storedFields: stored,
     webhook: { configured: webhookConfigured, url: webhookUrl(key) },
   };
@@ -132,11 +143,11 @@ export async function setActiveGateway(
   const target = await requireRow(key);
   const before = (await repo.listAll()).find((r) => r.isActive)?.name ?? null;
 
-  if (getEnv().NODE_ENV === "production") {
-    const view = await viewFor(key, target);
-    if (!view.configured) {
-      throw new ConflictError(`${LABEL_BY_KEY[key]} has no credentials configured. Save its credentials before activating it.`);
-    }
+  const gatewayView = await viewFor(key, target);
+  // B-provider: a key this environment refuses (test key in production, live key outside it) can never be activated.
+  if (gatewayView.problem) throw new ConflictError(gatewayView.problem);
+  if (getEnv().NODE_ENV === "production" && !gatewayView.configured) {
+    throw new ConflictError(`${LABEL_BY_KEY[key]} has no credentials configured. Save its credentials before activating it.`);
   }
 
   await repo.setActiveGateway(target.id);

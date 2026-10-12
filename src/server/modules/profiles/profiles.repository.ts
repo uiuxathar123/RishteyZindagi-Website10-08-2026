@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { profiles, profilePhotos, users } from "@/server/db/schema";
 
@@ -51,6 +51,16 @@ export async function findByUserIdWithAccount(userId: string): Promise<ProfileWi
   return row;
 }
 
+/** Batched form of findByIdWithAccount: one query for any number of profile ids. */
+export async function findManyWithAccount(profileIds: string[]): Promise<ProfileWithAccount[]> {
+  if (profileIds.length === 0) return [];
+  return db
+    .select({ profile: profiles, displayName: users.name, userStatus: users.status })
+    .from(profiles)
+    .innerJoin(users, eq(profiles.userId, users.id))
+    .where(inArray(profiles.id, profileIds));
+}
+
 export async function findById(profileId: string): Promise<ProfileRow | undefined> {
   const [row] = await db.select().from(profiles).where(eq(profiles.id, profileId)).limit(1);
   return row;
@@ -71,6 +81,19 @@ export async function update(profileId: string, data: ProfileUpdate): Promise<Pr
 
 export async function listPhotos(profileId: string): Promise<ProfilePhotoRow[]> {
   return db.select().from(profilePhotos).where(eq(profilePhotos.profileId, profileId)).orderBy(asc(profilePhotos.sortOrder));
+}
+
+/** Batched form of listPhotos: all photos for many profiles in one query, in the same sortOrder. */
+export async function listPhotosForProfiles(profileIds: string[]): Promise<Map<string, ProfilePhotoRow[]>> {
+  const out = new Map<string, ProfilePhotoRow[]>();
+  if (profileIds.length === 0) return out;
+  const rows = await db.select().from(profilePhotos).where(inArray(profilePhotos.profileId, profileIds)).orderBy(asc(profilePhotos.sortOrder));
+  for (const r of rows) {
+    const list = out.get(r.profileId);
+    if (list) list.push(r);
+    else out.set(r.profileId, [r]);
+  }
+  return out;
 }
 
 export async function countPhotos(profileId: string): Promise<number> {

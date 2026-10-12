@@ -12,6 +12,8 @@ import type { AuditLogRow } from "./audit-logs.repository";
 
 export interface AdminUserSummaryView {
   id: string;
+  /** B18: member-facing profile ID (RZ + 8 digits); null until the member creates a profile. */
+  profileId: string | null;
   name: string;
   email: string;
   mobileNumber: string;
@@ -24,11 +26,14 @@ export interface AdminUserSummaryView {
   profileStatus: string | null;
   verificationStatus: string | null;
   hasProfilePhoto: boolean | null;
+  /** Backend photo path of the primary photo (admin screens add the admin proxy prefix); null when the member has none. */
+  primaryPhotoUrl: string | null;
 }
 
-export function toSummaryView(user: UserRow, profile: ProfileRow | null): AdminUserSummaryView {
+export function toSummaryView(user: UserRow, profile: ProfileRow | null, primaryPhotoId: string | null = null): AdminUserSummaryView {
   return {
     id: user.id,
+    profileId: profile?.publicId ?? null,
     name: user.name,
     email: user.email,
     mobileNumber: user.mobileNumber,
@@ -41,6 +46,7 @@ export function toSummaryView(user: UserRow, profile: ProfileRow | null): AdminU
     profileStatus: profile?.profileStatus ?? null,
     verificationStatus: profile?.verificationStatus ?? null,
     hasProfilePhoto: profile?.hasProfilePhoto ?? null,
+    primaryPhotoUrl: primaryPhotoId ? `/api/v1/profiles/photos/${primaryPhotoId}/file` : null,
   };
 }
 
@@ -142,6 +148,7 @@ export function toDetailView(input: AdminUserDetailInput) {
     profile: profile
       ? {
           id: profile.id,
+          profileId: profile.publicId,
           gender: profile.gender,
           profileStatus: profile.profileStatus,
           verificationStatus: profile.verificationStatus,

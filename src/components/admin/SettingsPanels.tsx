@@ -7,19 +7,18 @@
  * per-field validation) is shown and the form keeps what the admin typed.
  */
 import { AsyncView, ListSkeleton } from "@/components/ui/AsyncView";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { FieldLabel, Input, Select } from "@/components/ui/Input";
+import { FieldLabel, Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
+import { cn } from "@/lib/utils";
 import { adminApi } from "@/lib/api/client";
 import { useAction, useAsync } from "@/lib/api/hooks";
-import type { MatchingWeights, OtpConfig, PaymentGatewayView } from "@/lib/api/types";
+import type { MatchingWeights, OtpConfig } from "@/lib/api/types";
 import { formatDateTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAdminSession } from "./AdminSessionProvider";
-import { ActionError, Card, fieldIssue, NotAvailable, SuccessNote } from "./AdminUi";
+import { ActionError, Card, fieldIssue, SuccessNote } from "./AdminUi";
 import { WEIGHT_CATEGORIES } from "./adminTypes";
 
 // ---------------------------------------------------------------------------
@@ -271,227 +270,6 @@ function WeightsForm({ data, onSaved }: { data: MatchingWeights; onSaved: (d: Ma
       </div>
       <ActionError error={save.error} />
       {saved && !dirty && <SuccessNote>Matching weights saved. New scores use them immediately.</SuccessNote>}
-    </form>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Payment gateways
-// ---------------------------------------------------------------------------
-
-export function GatewaysPanel() {
-  const list = useAsync(async (signal) => (await adminApi.get<{ gateways: PaymentGatewayView[] }>("/payment-gateways", { signal })).gateways, []);
-
-  function replace(g: PaymentGatewayView) {
-    list.setData((prev) => (prev ?? []).map((x) => (x.id === g.id ? g : g.isActive ? { ...x, isActive: false } : x)));
-  }
-
-  const active = list.data?.find((g) => g.isActive);
-
-  return (
-    <Card
-      title="Payment gateways"
-      description="Exactly one gateway takes member payments at a time. Credentials are write-only: they are encrypted when saved and never shown again."
-    >
-      <div className="p-5">
-        <AsyncView
-          data={list.data}
-          error={list.error}
-          loading={list.loading}
-          reload={list.reload}
-          skeleton={<ListSkeleton rows={3} />}
-          isEmpty={(d) => d.length === 0}
-          empty={{ title: "No gateways", description: "No payment gateway rows exist in the database." }}
-        >
-          {(gateways) => (
-            <div className="space-y-4">
-              {!active && (
-                <p role="alert" className="flex items-start gap-2 rounded-md border border-rz-warning/40 bg-rz-warning/10 px-3 py-2 text-[13px] text-rz-warning">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  No gateway is active, so member checkout is currently unavailable.
-                </p>
-              )}
-              <ul className="space-y-3">
-                {gateways.map((g) => (
-                  <GatewayRow key={g.id} gateway={g} onChanged={replace} />
-                ))}
-              </ul>
-              <NotAvailable title="Live gateways">
-                The gateway integrations are not wired to the vendors’ live APIs in this build, so “Test connection” reports exactly what the server can verify and activation does not by itself make real payments possible.
-              </NotAvailable>
-            </div>
-          )}
-        </AsyncView>
-      </div>
-    </Card>
-  );
-}
-
-function GatewayRow({ gateway, onChanged }: { gateway: PaymentGatewayView; onChanged: (g: PaymentGatewayView) => void }) {
-  const [confirm, setConfirm] = useState<"activate" | "deactivate" | null>(null);
-  const [configuring, setConfiguring] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const activate = useAction(() => adminApi.post<{ gateway: PaymentGatewayView }>(`/payment-gateways/${gateway.id}/activate`));
-  const deactivate = useAction(() => adminApi.post<{ gateway: PaymentGatewayView }>(`/payment-gateways/${gateway.id}/deactivate`));
-  const test = useAction(() => adminApi.post<{ ok: boolean; message: string }>(`/payment-gateways/${gateway.id}/test-connection`));
-
-  async function doActivate() {
-    setNotice(null);
-    const res = await activate.run();
-    if (!res) return;
-    setConfirm(null);
-    setNotice(`${gateway.name} is now the active gateway.`);
-    onChanged(res.gateway);
-  }
-  async function doDeactivate() {
-    setNotice(null);
-    const res = await deactivate.run();
-    if (!res) return;
-    setConfirm(null);
-    setNotice(`${gateway.name} deactivated. Checkout is unavailable until a gateway is active.`);
-    onChanged(res.gateway);
-  }
-  async function doTest() {
-    setTestResult(null);
-    const res = await test.run();
-    if (res) setTestResult(res);
-  }
-
-  const busy = activate.pending || deactivate.pending;
-  const mutationError = activate.error ?? deactivate.error;
-
-  return (
-    <li className="rounded-md border border-rz-border p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 font-semibold text-rz-navy">
-            {gateway.name}
-            <Badge tone={gateway.isActive ? "success" : "neutral"}>{gateway.isActive ? "Active" : "Inactive"}</Badge>
-            {gateway.mode && <Badge tone={gateway.mode === "live" ? "gold" : "navy"}>{gateway.mode === "live" ? "Live mode" : "Test mode"}</Badge>}
-          </p>
-          <p className="mt-1 text-[12.5px] text-rz-muted">
-            Credentials: {gateway.credentialsConfigured ? `stored (encrypted)${gateway.merchantIdLast4 ? ` · merchant id ending ${gateway.merchantIdLast4}` : ""}` : "none stored"} · Server environment:{" "}
-            {gateway.envConfigured ? "configured" : "not configured"}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" disabled={test.pending} onClick={doTest}>
-            {test.pending ? "Testing…" : "Test connection"}
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setConfiguring((v) => !v)} aria-expanded={configuring}>
-            {configuring ? "Close" : "Configure"}
-          </Button>
-          {gateway.isActive ? (
-            <Button type="button" size="sm" variant="outline" className="!border-rz-danger !text-rz-danger hover:!bg-rz-danger/5" disabled={busy} onClick={() => setConfirm("deactivate")}>
-              Deactivate
-            </Button>
-          ) : (
-            <Button type="button" size="sm" disabled={busy} onClick={() => setConfirm("activate")}>
-              Activate
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {confirm && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md bg-rz-cream px-3 py-2 text-sm" role="group" aria-label="Confirm change">
-          <span className="text-rz-text">
-            {confirm === "activate"
-              ? `Make ${gateway.name} the gateway for all new member payments? Any other active gateway is switched off.`
-              : `Deactivate ${gateway.name}? Member checkout stops working until a gateway is active again.`}
-          </span>
-          <Button type="button" size="sm" disabled={busy} onClick={confirm === "activate" ? doActivate : doDeactivate}>
-            {busy ? "Working…" : "Confirm"}
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => { setConfirm(null); activate.clearError(); deactivate.clearError(); }}>
-            Cancel
-          </Button>
-        </div>
-      )}
-
-      <div className="mt-2 space-y-2">
-        <ActionError error={mutationError} />
-        {notice && <SuccessNote>{notice}</SuccessNote>}
-        {test.error && <ActionError error={test.error} />}
-        {testResult && (
-          <p role="status" className={cn("flex items-start gap-2 rounded-md px-3 py-2 text-[13px]", testResult.ok ? "bg-rz-success/10 text-rz-success" : "bg-rz-warning/10 text-rz-warning")}>
-            {testResult.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0" />}
-            <span>
-              <strong>{testResult.ok ? "Connection OK." : "Connection not verified."}</strong> {testResult.message}
-            </span>
-          </p>
-        )}
-      </div>
-
-      {configuring && <GatewayConfigForm gateway={gateway} onSaved={(g) => { onChanged(g); setConfiguring(false); setNotice("Gateway configuration saved."); }} />}
-    </li>
-  );
-}
-
-function GatewayConfigForm({ gateway, onSaved }: { gateway: PaymentGatewayView; onSaved: (g: PaymentGatewayView) => void }) {
-  const [mode, setMode] = useState<string>(gateway.mode ?? "");
-  const [fields, setFields] = useState({ apiKey: "", apiSecret: "", merchantId: "", webhookSecret: "" });
-  const save = useAction((body: Record<string, string>) => adminApi.patch<{ gateway: PaymentGatewayView }>(`/payment-gateways/${gateway.id}`, body));
-
-  const body: Record<string, string> = {};
-  if (mode && mode !== gateway.mode) body.mode = mode;
-  for (const [k, v] of Object.entries(fields)) if (v.trim()) body[k] = v.trim();
-  const dirty = Object.keys(body).length > 0;
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await save.run(body);
-    if (!res) return;
-    setFields({ apiKey: "", apiSecret: "", merchantId: "", webhookSecret: "" });
-    onSaved(res.gateway);
-  }
-
-  const secretInputs: Array<[keyof typeof fields, string]> = [
-    ["apiKey", "API key"],
-    ["apiSecret", "API secret"],
-    ["merchantId", "Merchant id"],
-    ["webhookSecret", "Webhook secret"],
-  ];
-
-  return (
-    <form onSubmit={onSubmit} className="mt-4 space-y-4 border-t border-rz-border pt-4" autoComplete="off">
-      <p className="text-[12.5px] text-rz-muted">
-        Leave a credential blank to keep what is stored. Stored values are never displayed or returned by the API.
-      </p>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <FieldLabel htmlFor={`gm-${gateway.id}`}>Mode</FieldLabel>
-          <Select id={`gm-${gateway.id}`} value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="">{gateway.mode ? "Unchanged" : "Not set"}</option>
-            <option value="test">Test</option>
-            <option value="live">Live</option>
-          </Select>
-        </div>
-        {secretInputs.map(([k, label]) => (
-          <div key={k}>
-            <FieldLabel htmlFor={`g-${k}-${gateway.id}`}>
-              {label} <span className="font-normal">(write-only)</span>
-            </FieldLabel>
-            <Input
-              id={`g-${k}-${gateway.id}`}
-              type="password"
-              autoComplete="new-password"
-              spellCheck={false}
-              placeholder={gateway.credentialsConfigured ? "•••••• stored — type to replace" : ""}
-              value={fields[k]}
-              onChange={(e) => setFields((p) => ({ ...p, [k]: e.target.value }))}
-              aria-invalid={!!fieldIssue(save.error, k)}
-            />
-            {fieldIssue(save.error, k) && <p className="mt-1 text-[12.5px] text-rz-danger">{fieldIssue(save.error, k)}</p>}
-          </div>
-        ))}
-      </div>
-      <Button type="submit" size="sm" disabled={!dirty || save.pending}>
-        {save.pending ? "Saving…" : "Save configuration"}
-      </Button>
-      <ActionError error={save.error} />
     </form>
   );
 }

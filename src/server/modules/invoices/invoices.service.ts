@@ -245,6 +245,7 @@ export async function resendInvoice(ctx: AuthContext, invoiceId: string): Promis
   await notify({
     userId,
     channel: "EMAIL",
+    essential: true, // B18: a member-requested resend of their own invoice is not a marketing-style message
     title: `Invoice ${invoice.invoiceNumber} resent`,
     body: `Your invoice ${invoice.invoiceNumber} is available to download from your account (GET /api/v1/invoices/${invoice.id}/download).`,
     // No dedupeKey: a resend is a deliberate, repeatable member action

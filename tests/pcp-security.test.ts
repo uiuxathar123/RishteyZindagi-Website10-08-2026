@@ -71,6 +71,11 @@ async function allRouteCalls(): Promise<RouteCall[]> {
 /** Routes that are intentionally reachable without a session, and why. */
 const PUBLIC_ROUTES: Record<string, string> = {
   "admin/login": "credential exchange",
+  "admin/login/verify-mfa": "B19: second step of admin sign-in (e-mailed code), a credential exchange",
+  contact: "B19: public contact form (rate-limited, honeypot)",
+  "support-contact": "B19: public support details shown on the contact page",
+  "success-stories": "B19: published success stories (public page)",
+  "site-status": "B19: maintenance banner flag, reveals only on/off + message",
   "auth/forgot-password": "signed-out flow",
   "auth/login": "signed-out flow",
   "auth/recover-account/confirm": "signed-out flow (pending-deletion owner proves identity with password + OTP)",
@@ -88,6 +93,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
   "membership-plans": "public pricing",
   "reference/profile-options": "public form options",
   "search/profiles": "public search preview (B4 design)",
+  "search/access": "B18 UI hint for the same public search (soft-auth; the search route enforces the rule itself)",
   "profiles/[profileId]": "soft-auth public profile view (B4 design)",
   "internal/jobs/[job]": "authenticated by CRON_SECRET, not a session",
   "webhooks/phonepe": "authenticated by provider signature, not a session",

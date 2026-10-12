@@ -21,7 +21,14 @@ export function StatusPanel({ profile, onGoto }: { profile: OwnerProfile; onGoto
   return (
     <section className="mb-5 rounded-lg border border-rz-border bg-white p-5 md:p-6" aria-label="Profile completion">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-serif text-lg font-semibold text-rz-navy">Profile completion</h3>
+        <div>
+          <h3 className="font-serif text-lg font-semibold text-rz-navy">Profile completion</h3>
+          {profile.profileId && (
+            <p className="mt-0.5 text-xs text-rz-muted" data-testid="own-profile-id">
+              Your profile ID: <span className="font-semibold tracking-wide text-rz-navy">{profile.profileId}</span> — share it so someone can find you with Advanced search.
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={status.tone}>{status.label}</Badge>
           <Badge tone={verification.tone}>

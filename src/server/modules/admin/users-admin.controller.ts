@@ -22,6 +22,9 @@ const listUsersQuerySchema = z.object({
   q: z.string().trim().min(1).max(200).optional(),
   status: z.enum(["ACTIVE", "SUSPENDED", "DELETED_PENDING", "DELETED", "BLOCKED"]).optional(),
   verificationStatus: z.enum(["UNVERIFIED", "PENDING", "VERIFIED", "REJECTED"]).optional(),
+  membership: z.enum(["ACTIVE", "NONE"]).optional(),
+  openReports: z.enum(["true"]).transform(() => true as const).optional(),
+  sort: z.enum(["newest", "oldest", "name", "lastActive"]).optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(50).optional(),
 });
@@ -33,6 +36,9 @@ export async function listUsersHandler(req: NextRequest) {
     q: sp.get("q") ?? undefined,
     status: sp.get("status") ?? undefined,
     verificationStatus: sp.get("verificationStatus") ?? undefined,
+    membership: sp.get("membership") ?? undefined,
+    openReports: sp.get("openReports") ?? undefined,
+    sort: sp.get("sort") ?? undefined,
     page: sp.get("page") ?? undefined,
     pageSize: sp.get("pageSize") ?? undefined,
   });

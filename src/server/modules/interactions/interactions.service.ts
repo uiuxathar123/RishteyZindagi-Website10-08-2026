@@ -41,6 +41,7 @@
  *    can never be initiated against someone who couldn't have been
  *    legitimately discovered through the app.
  */
+import { isAcceptedPartner } from "@/server/modules/profiles/privacy";
 import { NotFoundError, AuthorizationError, ConflictError, ValidationError } from "@/server/lib/errors";
 import type { AuthContext } from "@/server/middleware/authenticate";
 import { record as recordAudit } from "@/server/modules/audit/audit.service";
@@ -78,7 +79,11 @@ function assertNotSelf(userId: string, targetUserId: string): void {
  * strand an already-pending action in an unrespondable state. */
 async function assertCanInitiate(actorUserId: string, targetUserId: string): Promise<void> {
   const target = await repo.findTargetAccountInfo(targetUserId);
-  if (!target || target.accountStatus !== "ACTIVE" || target.profileStatus !== "READY_FOR_VISIBILITY") {
+  if (!target || target.accountStatus !== "ACTIVE" || target.profileStatus !== "READY_FOR_VISIBILITY" || target.approvalStatus !== "APPROVED") {
+    throw new NotFoundError("User not found.");
+  }
+  // B18: a hidden profile cannot be approached by someone it never connected with (no probing of hidden members).
+  if (target.profileVisibility === "HIDDEN" && !(await isAcceptedPartner(actorUserId, targetUserId))) {
     throw new NotFoundError("User not found.");
   }
   const blocked = await repo.isBlockedEitherDirection(actorUserId, targetUserId);

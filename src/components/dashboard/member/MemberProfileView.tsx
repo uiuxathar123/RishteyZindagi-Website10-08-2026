@@ -56,7 +56,11 @@ function Gallery({ card }: { card: CardProfile }) {
           </div>
         )}
       </div>
-      {card.photos.length === 0 && <p className="mt-2 text-center text-xs text-rz-muted">No photos added yet.</p>}
+      {card.photos.length === 0 && (
+        <p className="mt-2 text-center text-xs text-rz-muted">
+          {card.photosRestricted ? "This member shares photos with accepted connections only." : "No photos added yet."}
+        </p>
+      )}
       {card.photos.length > 1 && (
         <ul className="mt-3 flex flex-wrap gap-2" aria-label="Photos">
           {card.photos.map((p, i) => (
@@ -135,10 +139,16 @@ function Loaded({ card }: { card: CardProfile }) {
                 {card.displayName}, {card.age}
               </h1>
               {card.gender && <span className="rounded-full bg-rz-border/60 px-2.5 py-0.5 text-xs font-semibold text-rz-muted">{genderLabel(card.gender)}</span>}
+              {card.lastActive && <span className="text-xs text-rz-muted">{card.lastActive}</span>}
             </div>
             {place && (
               <p className="mt-1 flex items-center gap-1.5 text-sm text-rz-muted">
                 <MapPin className="h-4 w-4 shrink-0" /> {place}
+              </p>
+            )}
+            {card.publicId && (
+              <p className="mt-1 text-xs font-medium tracking-wide text-rz-muted" data-testid="profile-public-id">
+                Profile ID {card.publicId}
               </p>
             )}
           </div>

@@ -16,7 +16,7 @@ import { GET as searchProfiles } from "@/app/api/v1/search/profiles/route";
 import { db } from "@/server/db/client";
 import { profiles } from "@/server/db/schema";
 import { __resetRateLimitsForTests } from "@/server/middleware/rate-limit";
-import { resetTransactionalTables, resetAdminUsers, resetOtpConfigForTests } from "./helpers/reset-db";
+import { resetTransactionalTables, resetAdminUsers, resetOtpConfigForTests, disableAdvancedSearchGateForTests } from "./helpers/reset-db";
 import { req, resolveReferenceIds, buildReadyProfile } from "./helpers/profile-fixtures";
 
 function getReq(query: string, token?: string) {
@@ -39,6 +39,7 @@ describe("QA boundary conditions — search range filters", () => {
     await resetTransactionalTables();
     await resetAdminUsers();
     await resetOtpConfigForTests();
+    await disableAdvancedSearchGateForTests(); // B18: these suites test filter mechanics; the gate has its own tests
     __resetRateLimitsForTests();
   });
 

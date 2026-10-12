@@ -12,7 +12,7 @@ import { db } from "@/server/db/client";
 import { users } from "@/server/db/schema";
 import * as referenceRepo from "@/server/modules/profiles/reference.repository";
 import { __resetRateLimitsForTests } from "@/server/middleware/rate-limit";
-import { resetTransactionalTables, resetAdminUsers, resetOtpConfigForTests } from "./helpers/reset-db";
+import { resetTransactionalTables, resetAdminUsers, resetOtpConfigForTests, disableAdvancedSearchGateForTests } from "./helpers/reset-db";
 import { req, resolveReferenceIds, buildReadyProfile, type ReferenceIds } from "./helpers/profile-fixtures";
 
 function getReq(query: string, token?: string) {
@@ -51,6 +51,7 @@ describe("Profile search", () => {
     await resetTransactionalTables();
     await resetAdminUsers();
     await resetOtpConfigForTests();
+    await disableAdvancedSearchGateForTests(); // B18: these suites test filter mechanics; the gate has its own tests
     __resetRateLimitsForTests();
   });
 

@@ -8,6 +8,8 @@
  * (`users.view`'s domain — identity/status, not billing state). See
  * BACKEND.md's B9 section for the full reasoning.
  */
+import { sql } from "drizzle-orm";
+import { db } from "@/server/db/client";
 import { ValidationError } from "@/server/lib/errors";
 import type { AuthContext } from "@/server/middleware/authenticate";
 import { requirePermission } from "@/server/middleware/rbac";
@@ -64,4 +66,37 @@ export async function listMembershipsForAdmin(ctx: AuthContext, input: ListMembe
   const pageSize = Math.min(input.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
   const { items, total } = await repo.listMemberships({ userId: input.userId, status: input.status, planId: input.planId }, page, pageSize);
   return { items: items.map(toView), page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+}
+
+export interface RenewalOverview {
+  counts: Record<"LAPSED" | "FOLLOW_UP_SENT" | "RENEWED" | "CLOSED", number>;
+  recent: Array<{ membershipId: string; userId: string; planName: string | null; state: string; lapsedAt: string; lastNoticeAt: string | null }>;
+  /** Plain statement shown next to the numbers so nobody reads them as automatic charging. */
+  note: string;
+}
+
+/** B19: read-only view of the renewal follow-up cycles (see jobs/definitions/dunning.ts). */
+export async function getRenewalOverview(ctx: AuthContext): Promise<RenewalOverview> {
+  await requirePermission(ctx, PERMISSION);
+  const [c, r] = await Promise.all([
+    db.execute(sql`SELECT state, count(*)::int AS n FROM renewal_cycles GROUP BY state`),
+    db.execute(sql`
+      SELECT c.membership_id, c.user_id, p.name AS plan_name, c.state, c.lapsed_at, c.last_notice_at
+      FROM renewal_cycles c JOIN memberships m ON m.id = c.membership_id LEFT JOIN membership_plans p ON p.id = m.plan_id
+      ORDER BY c.lapsed_at DESC LIMIT 20`),
+  ]);
+  const counts = { LAPSED: 0, FOLLOW_UP_SENT: 0, RENEWED: 0, CLOSED: 0 } as RenewalOverview["counts"];
+  for (const row of c.rows as Array<{ state: string; n: number }>) if (row.state in counts) counts[row.state as keyof typeof counts] = Number(row.n);
+  return {
+    counts,
+    recent: (r.rows as Array<Record<string, unknown>>).map((x) => ({
+      membershipId: String(x.membership_id),
+      userId: String(x.user_id),
+      planName: x.plan_name ? String(x.plan_name) : null,
+      state: String(x.state),
+      lapsedAt: new Date(String(x.lapsed_at)).toISOString(),
+      lastNoticeAt: x.last_notice_at ? new Date(String(x.last_notice_at)).toISOString() : null,
+    })),
+    note: "These are reminders only. The platform does not store cards or mandates and never charges a member automatically.",
+  };
 }

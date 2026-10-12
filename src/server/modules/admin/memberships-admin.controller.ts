@@ -34,3 +34,8 @@ export async function listMembershipsHandler(req: NextRequest) {
   const page = await membershipsAdminService.listMembershipsForAdmin(ctx, parsed.data);
   return ok(page);
 }
+
+export async function renewalOverviewHandler(req: NextRequest) {
+  const ctx = await authenticate(req);
+  return ok(await membershipsAdminService.getRenewalOverview(ctx));
+}

@@ -5,6 +5,7 @@ import { PhotoImage } from "@/components/ui/PhotoImage";
 import { api } from "@/lib/api/client";
 import { isApiError } from "@/lib/api/errors";
 import type { OwnerPhoto } from "@/lib/api/types";
+import { PHOTOS_CHANGED_EVENT } from "@/components/profile/useMyPrimaryPhoto";
 import { photoSrc } from "@/lib/photo";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Loader2, Plus, Star, Trash2 } from "lucide-react";
@@ -46,7 +47,12 @@ async function courtesyCheck(file: File): Promise<string | null> {
   return null;
 }
 
-export function PhotoManager({ photos: initial, onChanged }: { photos: OwnerPhoto[]; onChanged: () => void }) {
+export function PhotoManager({ photos: initial, onChanged: onChangedProp }: { photos: OwnerPhoto[]; onChanged: () => void }) {
+  // Also tells the dashboard header to refresh its avatar.
+  const onChanged = () => {
+    onChangedProp();
+    window.dispatchEvent(new Event(PHOTOS_CHANGED_EVENT));
+  };
   const [photos, setPhotos] = useState<OwnerPhoto[]>(initial);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState<Record<string, Busy>>({});

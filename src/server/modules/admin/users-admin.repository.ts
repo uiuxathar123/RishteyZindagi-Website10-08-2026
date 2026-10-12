@@ -7,9 +7,9 @@
  * directly" precedent `reports.repository.ts` already established for
  * `users.status` reads/writes (see its own top-of-file comment).
  */
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { users, profiles, reports } from "@/server/db/schema";
+import { users, profiles, reports, memberships } from "@/server/db/schema";
 
 export type UserRow = typeof users.$inferSelect;
 export type ProfileRow = typeof profiles.$inferSelect;
@@ -18,7 +18,19 @@ export interface AdminUserSearchFilter {
   q?: string;
   status?: UserRow["status"];
   verificationStatus?: ProfileRow["verificationStatus"];
+  /** B18: ACTIVE = has an active, unexpired membership; NONE = has none. */
+  membership?: "ACTIVE" | "NONE";
+  /** B18: true = only users with at least one OPEN report filed against them. */
+  openReports?: boolean;
+  sort?: "newest" | "oldest" | "name" | "lastActive";
 }
+
+/** B18: escapes LIKE metacharacters so a `%` or `_` typed in the search box is matched literally. */
+export function escapeLike(raw: string): string {
+  return raw.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AdminUserListRow {
   user: UserRow;
@@ -30,6 +42,19 @@ export interface AdminUserListRow {
  * appears (never silently dropped from the admin's view of "who exists").
  * `q` matches name/email/mobileNumber (partial, case-insensitive).
  */
+function orderBy(sort: AdminUserSearchFilter["sort"]) {
+  switch (sort) {
+    case "oldest":
+      return [asc(users.createdAt), asc(users.id)];
+    case "name":
+      return [asc(users.name), asc(users.id)];
+    case "lastActive":
+      return [sql`${users.lastActiveAt} DESC NULLS LAST`, desc(users.id)];
+    default:
+      return [desc(users.createdAt), desc(users.id)];
+  }
+}
+
 export async function searchUsers(
   filter: AdminUserSearchFilter,
   page: number,
@@ -37,8 +62,18 @@ export async function searchUsers(
 ): Promise<{ items: AdminUserListRow[]; total: number }> {
   const conditions = [];
   if (filter.q && filter.q.trim()) {
-    const term = `%${filter.q.trim()}%`;
-    conditions.push(or(ilike(users.name, term), ilike(users.email, term), ilike(users.mobileNumber, term)));
+    const raw = filter.q.trim();
+    const term = `%${escapeLike(raw)}%`;
+    const matchers = [ilike(users.name, term), ilike(users.email, term), ilike(users.mobileNumber, term), ilike(profiles.publicId, term)];
+    if (UUID_RE.test(raw)) matchers.push(eq(users.id, raw.toLowerCase()), eq(profiles.id, raw.toLowerCase()));
+    conditions.push(or(...matchers));
+  }
+  if (filter.membership) {
+    const active = sql`EXISTS (SELECT 1 FROM ${memberships} m WHERE m.user_id = ${users.id} AND m.status = 'ACTIVE' AND (m.expires_at IS NULL OR m.expires_at > now()))`;
+    conditions.push(filter.membership === "ACTIVE" ? active : sql`NOT ${active}`);
+  }
+  if (filter.openReports) {
+    conditions.push(sql`EXISTS (SELECT 1 FROM ${reports} r WHERE r.reported_user_id = ${users.id} AND r.status = 'OPEN')`);
   }
   if (filter.status) conditions.push(eq(users.status, filter.status));
   if (filter.verificationStatus) conditions.push(eq(profiles.verificationStatus, filter.verificationStatus));
@@ -54,7 +89,7 @@ export async function searchUsers(
       // see PERFORMANCE_REPORT.md / BACKEND.md's B13 section): same
       // pagination-drift fix as chat.repository.ts's listMessages (see
       // its doc comment) — `createdAt` alone is not a unique tiebreaker.
-      .orderBy(desc(users.createdAt), desc(users.id))
+      .orderBy(...orderBy(filter.sort))
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db

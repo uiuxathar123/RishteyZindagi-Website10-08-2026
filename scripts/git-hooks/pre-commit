@@ -1,0 +1,3 @@
+#!/bin/sh
+# Pre-commit: refuse to commit secrets. Install once with: npm run hooks:install
+exec npx --no-install tsx scripts/scan-secrets.ts --staged

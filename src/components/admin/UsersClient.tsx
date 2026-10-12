@@ -9,6 +9,7 @@ import { adminApi } from "@/lib/api/client";
 import { useAction, useAsync } from "@/lib/api/hooks";
 import type { AdminUserSummary, Page } from "@/lib/api/types";
 import { formatDate, formatDateTime, humanize, timeAgo } from "@/lib/format";
+import { photoSrc } from "@/lib/photo";
 import { MapPin, Search, ShieldCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAdminSession } from "./AdminSessionProvider";
@@ -41,19 +42,31 @@ export function UsersClient({ initialUserId }: { initialUserId?: string }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [verification, setVerification] = useState("");
+  const [membership, setMembership] = useState("");
+  const [openReports, setOpenReports] = useState(false);
+  const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(initialUserId ?? null);
   const q = useDebounced(query.trim());
 
-  useEffect(() => setPage(1), [q, status, verification]);
+  useEffect(() => setPage(1), [q, status, verification, membership, openReports, sort]);
 
   const list = useAsync(
     (signal) =>
       adminApi.get<Page<AdminUserSummary>>("/users", {
-        query: { q: q || undefined, status: status || undefined, verificationStatus: verification || undefined, page, pageSize: PAGE_SIZE },
+        query: {
+          q: q || undefined,
+          status: status || undefined,
+          verificationStatus: verification || undefined,
+          membership: membership || undefined,
+          openReports: openReports ? "true" : undefined,
+          sort: sort !== "newest" ? sort : undefined,
+          page,
+          pageSize: PAGE_SIZE,
+        },
         signal,
       }),
-    [q, status, verification, page]
+    [q, status, verification, membership, openReports, sort, page]
   );
 
   return (
@@ -67,7 +80,7 @@ export function UsersClient({ initialUserId }: { initialUserId?: string }) {
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_200px_200px] sm:items-end">
         <div>
           <FieldLabel htmlFor="admin-user-search">Search</FieldLabel>
-          <Input id="admin-user-search" placeholder="Name, email or mobile…" icon={<Search className="h-4 w-4" />} value={query} onChange={(e) => setQuery(e.target.value)} />
+          <Input id="admin-user-search" placeholder="Name, email, mobile, profile ID (RZ…) or user ID…" icon={<Search className="h-4 w-4" />} value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
         <div>
           <FieldLabel htmlFor="admin-user-status">Account status</FieldLabel>
@@ -90,6 +103,30 @@ export function UsersClient({ initialUserId }: { initialUserId?: string }) {
             <option value="UNVERIFIED">Unverified</option>
           </Select>
         </div>
+      </div>
+
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-[200px_200px_auto] sm:items-end">
+        <div>
+          <FieldLabel htmlFor="admin-user-membership">Membership</FieldLabel>
+          <Select id="admin-user-membership" value={membership} onChange={(e) => setMembership(e.target.value)}>
+            <option value="">Any</option>
+            <option value="ACTIVE">Has an active plan</option>
+            <option value="NONE">No active plan</option>
+          </Select>
+        </div>
+        <div>
+          <FieldLabel htmlFor="admin-user-sort">Sort by</FieldLabel>
+          <Select id="admin-user-sort" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name (A–Z)</option>
+            <option value="lastActive">Recently active</option>
+          </Select>
+        </div>
+        <label className="flex items-center gap-2 pb-2 text-sm text-rz-text">
+          <input type="checkbox" className="rz-focus h-4 w-4 accent-rz-maroon" checked={openReports} onChange={(e) => setOpenReports(e.target.checked)} />
+          Only members with open reports
+        </label>
       </div>
 
       <AsyncView
@@ -123,8 +160,11 @@ export function UsersClient({ initialUserId }: { initialUserId?: string }) {
                     <tr key={u.id} className="border-b border-rz-border last:border-0">
                       <td className={td}>
                         <div className="flex items-center gap-3">
-                          <Avatar alt={u.name} size="sm" />
-                          <span className="font-medium text-rz-text">{u.name}</span>
+                          <Avatar src={photoSrc(u.primaryPhotoUrl, "admin")} alt={u.primaryPhotoUrl ? `Photo of ${u.name}` : u.name} size="sm" />
+                          <span className="min-w-0">
+                            <span className="block font-medium text-rz-text">{u.name}</span>
+                            {u.profileId && <span className="block text-[11px] tracking-wide text-rz-muted">{u.profileId}</span>}
+                          </span>
                         </div>
                       </td>
                       <td className={`${td} text-rz-muted`}>{u.email}</td>

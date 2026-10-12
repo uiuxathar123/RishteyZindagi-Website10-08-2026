@@ -15,6 +15,15 @@ export function checkPcpProductionReadiness(env: Env, raw: NodeJS.ProcessEnv = p
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  // Razorpay key-mode guard (see payments/credentials.ts): production only runs with LIVE keys. This checks the
+  // environment variable only; keys saved through the admin panel are checked at request time and reported there.
+  if (env.RAZORPAY_KEY_ID && !env.RAZORPAY_KEY_ID.startsWith("rzp_live_")) {
+    errors.push(
+      env.RAZORPAY_KEY_ID.startsWith("rzp_test_")
+        ? "RAZORPAY_KEY_ID is a TEST key (rzp_test_…). Production refuses test keys at request time — set the account's LIVE key, or leave it unset and save the live key in Admin → Payments."
+        : "RAZORPAY_KEY_ID is not a recognised live key (rzp_live_…). Production only accepts live keys."
+    );
+  }
   if (env.TRUST_PROXY_HOPS === undefined) {
     warnings.push(
       "TRUST_PROXY_HOPS is unset: the rate limiter then keys on the LEFT-MOST X-Forwarded-For entry, which a client can forge unless your edge proxy overwrites the header. Set it to the number of trusted reverse proxies in front of the app (e.g. 1)."

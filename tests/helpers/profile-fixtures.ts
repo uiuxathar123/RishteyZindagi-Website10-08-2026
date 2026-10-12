@@ -35,6 +35,10 @@ export interface TestMember {
 
 let counter = 0;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export async function createVerifiedMember(namePrefix = "profile-test"): Promise<TestMember> {
   counter += 1;
   const email = `${namePrefix}-${counter}-${Date.now()}@example.com`;
@@ -47,14 +51,30 @@ export async function createVerifiedMember(namePrefix = "profile-test"): Promise
   const deviceId = `${namePrefix}-device-${counter}`;
 
   const regRes = await register(req("http://localhost/api/v1/auth/register", { name: "Profile Test User", email, mobileNumber }));
-  const { data: regData } = await regRes.json();
-  const code = getDevOtpCode(regData.identifier, "SIGNUP")!;
-  const verifyRes = await verifySignupOtp(req("http://localhost/api/v1/auth/verify-signup-otp", { identifier: regData.identifier, code }));
+  const payload: unknown = await regRes.json().catch(() => null);
+  const body = isRecord(payload) ? payload : null;
+  const data = isRecord(body?.data) ? body.data : null;
+  const error = isRecord(body?.error) ? body.error : null;
+  const errorCode =
+    typeof error?.code === "string" && /^[A-Z0-9_]{1,64}$/.test(error.code)
+      ? error.code
+      : null;
+  if (regRes.status !== 201 || typeof data?.identifier !== "string" || data.identifier.length === 0) {
+    throw new Error(
+      `Registration fixture expected HTTP 201 with data.identifier; received HTTP ${regRes.status}${errorCode ? ` (${errorCode})` : ""}. Check the registration response and test configuration.`
+    );
+  }
+  const identifier = data.identifier;
+  const code = getDevOtpCode(identifier, "SIGNUP");
+  if (!code) {
+    throw new Error("Registration fixture received HTTP 201 but no local SIGNUP OTP was captured; check OTP test configuration.");
+  }
+  const verifyRes = await verifySignupOtp(req("http://localhost/api/v1/auth/verify-signup-otp", { identifier, code }));
   const { data: verifyData } = await verifyRes.json();
   const setPwRes = await setPassword(
     req(
       "http://localhost/api/v1/auth/set-password",
-      { identifier: regData.identifier, ticket: verifyData.ticket, password: "correcthorsebattery" },
+      { identifier, ticket: verifyData.ticket, password: "correcthorsebattery" },
       { deviceId }
     )
   );

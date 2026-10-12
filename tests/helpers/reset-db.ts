@@ -34,6 +34,10 @@ import { otpConfigs, matchingWeightConfigs, reportCategories, membershipPlans, m
  * for the one thing about them a test can leave dirty (an admin-changed
  * active gateway / credentials). */
 export async function resetTransactionalTables() {
+  // One statement so Postgres takes AccessExclusiveLock on every named
+  // table (and CASCADE dependents) together. Separate TRUNCATE calls go
+  // through different pool connections and can wait on each other — that
+  // showed up as Vitest "Hook timed out in 10000ms" rather than a query error.
   await db.execute(sql`
     TRUNCATE TABLE
       audit_logs,
@@ -41,7 +45,10 @@ export async function resetTransactionalTables() {
       device_sessions,
       otps,
       profiles,
-      users
+      users,
+      job_runs,
+      rate_limit_counters,
+      payment_webhook_events
     RESTART IDENTITY CASCADE
   `);
 }
@@ -54,6 +61,10 @@ export async function resetTransactionalTables() {
  * regardless of call order. */
 export async function resetAdminUsers() {
   await db.execute(sql`TRUNCATE TABLE admin_users RESTART IDENTITY CASCADE`);
+  // B18: heal the singleton straight away. Without this, a suite that never calls
+  // resetOtpConfigForTests() (e.g. performance-pagination-stability) failed whenever vitest happened to
+  // schedule it after a suite that truncated admin_users — an ordering hazard, not a product defect.
+  await resetOtpConfigForTests();
 }
 
 /**
@@ -161,14 +172,23 @@ export async function resetReportAndWarningCategoriesForTests() {
  * B8 seed data, since none exists yet) and an ACTIVE row for the given
  * user. Pass `expiresAt` to simulate an expiring/expired membership.
  */
-export async function activateMembershipForTests(userId: string, opts?: { expiresAt?: Date | null }): Promise<void> {
-  const [existingPlan] = await db.select().from(membershipPlans).where(eq(membershipPlans.code, "B7_TEST_PLAN")).limit(1);
+export async function activateMembershipForTests(userId: string, opts?: { expiresAt?: Date | null; advancedSearch?: boolean }): Promise<void> {
+  // B18: `advancedSearch: true` uses a second fixture plan whose features
+  // carry advancedSearch; the default plan has no features (chat only).
+  const code = opts?.advancedSearch ? "B18_ADV_SEARCH_TEST_PLAN" : "B7_TEST_PLAN";
+  const [existingPlan] = await db.select().from(membershipPlans).where(eq(membershipPlans.code, code)).limit(1);
   const plan =
     existingPlan ??
     (
       await db
         .insert(membershipPlans)
-        .values({ code: "B7_TEST_PLAN", name: "B7 Test Plan", priceInPaise: 0, durationDays: 30 })
+        .values({
+          code,
+          name: opts?.advancedSearch ? "B18 Advanced Search Test Plan" : "B7 Test Plan",
+          priceInPaise: 0,
+          durationDays: 30,
+          ...(opts?.advancedSearch ? { features: { advancedSearch: true } } : {}),
+        })
         .returning()
     )[0];
   await db.insert(memberships).values({
@@ -203,4 +223,15 @@ export async function expireMembershipForTests(userId: string): Promise<void> {
 export async function resetPaymentGatewaysForTests(): Promise<void> {
   await db.update(paymentGateways).set({ isActive: false, config: null });
   await db.update(paymentGateways).set({ isActive: true }).where(eq(paymentGateways.name, "Razorpay"));
+}
+
+/**
+ * B18: switches the "advanced search needs a plan" rule off for suites that
+ * test filter MECHANICS (height / income / profession ranges) anonymously.
+ * The entitlement rule itself is covered in tests/b18-search.test.ts. Call
+ * after `resetAdminUsers()` (which clears platform_settings).
+ */
+export async function disableAdvancedSearchGateForTests(): Promise<void> {
+  const { upsert } = await import("@/server/modules/platform-settings/platform-settings.repository");
+  await upsert("search.settings", { defaultPageSize: 20, maxPageSize: 50, enforceAdvancedSearchEntitlement: false }, null);
 }

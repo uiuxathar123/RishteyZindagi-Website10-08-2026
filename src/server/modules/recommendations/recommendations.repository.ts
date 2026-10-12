@@ -89,7 +89,11 @@ export async function fetchEligibleCandidates(input: HardFilterInput): Promise<C
     .where(
       and(
         eq(profiles.profileStatus, "READY_FOR_VISIBILITY"),
+        // B19: manual-approval queue.
+        eq(profiles.approvalStatus, "APPROVED"),
         eq(users.status, "ACTIVE"),
+        // B18: a member who chose "hide my profile" is not recommended to anyone.
+        eq(profiles.profileVisibility, "VISIBLE"),
         ne(profiles.userId, input.requesterUserId),
         eq(profiles.gender, input.requesterEffectiveGenderPreference),
         sql`${candidateEffectiveGenderPref} = ${input.requesterGender}`,

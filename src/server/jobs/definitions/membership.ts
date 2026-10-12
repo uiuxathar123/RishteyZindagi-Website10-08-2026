@@ -170,6 +170,15 @@ export const membershipRenewalFailedJob: JobDefinition = {
         } catch (err) {
           logError("job-membership-renewal-failed-notify", err, { membershipId: r.id });
         }
+        // B19: start the follow-up cycle that the `membership-dunning` job advances. Idempotent (unique per membership).
+        try {
+          await db.execute(sql`
+            INSERT INTO renewal_cycles (id, membership_id, user_id, state, lapsed_at)
+            VALUES (gen_random_uuid(), ${r.id}, ${r.user_id}, 'LAPSED', COALESCE(${r.expires_at}::timestamptz, now()))
+            ON CONFLICT (membership_id) DO NOTHING`);
+        } catch (err) {
+          logError("job-membership-renewal-failed-cycle", err, { membershipId: r.id });
+        }
       }
       if (rows.length < BATCH) break;
     }

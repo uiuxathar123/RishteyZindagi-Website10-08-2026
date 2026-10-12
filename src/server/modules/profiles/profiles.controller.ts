@@ -239,6 +239,23 @@ export async function getPublicProfileHandler(req: NextRequest, params: { profil
   return ok(result);
 }
 
+// --- Batched list-card summaries ----------------------------------------
+
+const summariesQuerySchema = z.object({
+  ids: z
+    .string()
+    .min(1)
+    .transform((v) => v.split(",").map((x) => x.trim()).filter(Boolean))
+    .pipe(z.array(uuidField).min(1).max(profilesService.MAX_PROFILE_SUMMARY_IDS)),
+});
+
+export async function getProfileSummariesHandler(req: NextRequest) {
+  const ctx = await authenticate(req); // members only; anonymous callers get the normal 401
+  const { ids } = parseParams(summariesQuerySchema, { ids: new URL(req.url).searchParams.get("ids") ?? "" });
+  const items = await profilesService.getProfileSummaries(ctx, ids);
+  return ok({ items });
+}
+
 // --- Admin verification foundation --------------------------------------
 
 const verifyProfileParamsSchema = z.object({ profileId: uuidField });

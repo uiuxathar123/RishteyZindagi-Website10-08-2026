@@ -63,6 +63,7 @@ import { getInfluenceBatch } from "./real-behaviour-signal-provider";
 // circuit, primary/secondary split (classifyTier), and pagination math
 // are all untouched.
 import { getVisibilityBoostBatch, applyVisibilityBoost } from "@/server/modules/memberships/visibility-boost";
+import { viewerExtrasFor, type ViewerExtras } from "@/server/modules/profiles/privacy";
 import { toRecommendationItem, type RecommendationsPage, type RecommendationItem } from "./recommendations.dto";
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -135,9 +136,9 @@ function byScoreThenId(a: { candidate: CandidateRow; result: CompatibilityResult
   return aId < bId ? -1 : aId > bId ? 1 : 0;
 }
 
-async function toItem(candidate: CandidateRow, result: CompatibilityResult, tier: "PRIMARY" | "SECONDARY"): Promise<RecommendationItem> {
+async function toItem(candidate: CandidateRow, result: CompatibilityResult, tier: "PRIMARY" | "SECONDARY", extras?: ViewerExtras): Promise<RecommendationItem> {
   const [lookups, photos] = await Promise.all([resolveLookups(candidate.profile), profilesRepo.listPhotos(candidate.profile.id)]);
-  const profileView = toAuthenticatedPublicView(candidate.profile, candidate.displayName, lookups, photos);
+  const profileView = toAuthenticatedPublicView(candidate.profile, candidate.displayName, lookups, photos, extras);
   return toRecommendationItem(profileView, result.score, result.breakdown, tier);
 }
 
@@ -244,9 +245,10 @@ export async function getMyRecommendations(ctx: AuthContext, input: Recommendati
   const secondaryTotal = secondaryFiltered.length;
   const secondarySlice = secondaryFiltered.slice(0, MAX_SECONDARY_ITEMS);
 
+  const extras = await viewerExtrasFor(userId, [...primaryPageSlice, ...secondarySlice].map(({ candidate }) => candidate.profile));
   const [items, secondaryItems] = await Promise.all([
-    Promise.all(primaryPageSlice.map(({ candidate, result }) => toItem(candidate, result, "PRIMARY"))),
-    Promise.all(secondarySlice.map(({ candidate, result }) => toItem(candidate, result, "SECONDARY"))),
+    Promise.all(primaryPageSlice.map(({ candidate, result }) => toItem(candidate, result, "PRIMARY", extras.get(candidate.profile.id)))),
+    Promise.all(secondarySlice.map(({ candidate, result }) => toItem(candidate, result, "SECONDARY", extras.get(candidate.profile.id)))),
   ]);
 
   return { status: "ok", items, secondaryItems, secondaryTotal, page, pageSize, total, totalPages };

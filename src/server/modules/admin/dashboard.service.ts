@@ -48,3 +48,19 @@ export async function getDashboardStats(ctx: AuthContext): Promise<DashboardStat
     suspensions: { activeAfterThreshold: suspendedAfterThreshold },
   };
 }
+
+export interface DashboardTrends {
+  days: number;
+  timezone: "Asia/Kolkata";
+  series: repo.TrendDay[];
+  currencies: string[];
+}
+
+/** B19: daily series behind the Overview charts. Same permission as the totals. `days` is 7–90 (default 30). */
+export async function getDashboardTrends(ctx: AuthContext, daysInput?: number): Promise<DashboardTrends> {
+  await requirePermission(ctx, PERMISSION);
+  const days = Math.min(90, Math.max(7, Math.floor(daysInput ?? 30)));
+  const series = await repo.getDailyTrends(days);
+  const currencies = Array.from(new Set(series.flatMap((d) => Object.keys(d.revenue)))).sort();
+  return { days, timezone: "Asia/Kolkata", series, currencies };
+}

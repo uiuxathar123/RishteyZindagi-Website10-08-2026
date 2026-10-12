@@ -97,6 +97,8 @@ export interface FamilyDetails {
 
 export interface OwnerProfile {
   id: string;
+  /** Member-facing profile ID (RZ + 8 digits). */
+  profileId?: string;
   userId: string;
   displayName: string;
   gender: "MALE" | "FEMALE";
@@ -127,6 +129,8 @@ export interface OwnerProfile {
   missingRequiredFields: string[];
   profileStatus: "INCOMPLETE" | "COMPLETE" | "READY_FOR_VISIBILITY";
   isReadyForVisibility: boolean;
+  approvalStatus?: "APPROVED" | "PENDING" | "REJECTED";
+  approvalReason?: string | null;
   photos: OwnerPhoto[];
 }
 
@@ -145,6 +149,8 @@ export interface PublicPhoto {
 /** What a signed-in member sees of someone else. */
 export interface MemberProfile {
   id: string;
+  /** Member-facing profile ID (RZ + 8 digits). */
+  profileId?: string;
   /** The owner's user id — what interaction / chat / report APIs address. */
   userId: string;
   displayName: string;
@@ -163,6 +169,10 @@ export interface MemberProfile {
   aboutMe: string | null;
   verificationStatus: string;
   photos: PublicPhoto[];
+  /** B18: true when the owner limited photos to accepted connections and you are not one. */
+  photosRestricted?: boolean;
+  /** B18: coarse hint such as "Active this week"; absent/null when the owner hides it. */
+  lastActive?: string | null;
 }
 
 /** What a signed-out visitor sees. No user id, no photo URL. */
@@ -331,6 +341,8 @@ export interface MyMembership {
   planCode: string | null;
   planName: string | null;
   isActive: boolean;
+  /** B18: what the current plan unlocks (advanced search filters). */
+  entitlements?: { advancedSearch: boolean };
 }
 
 export interface CheckoutResult {
@@ -416,6 +428,8 @@ export interface AdminDashboardStats {
 
 export interface AdminUserSummary {
   id: string;
+  /** Member-facing profile ID (RZ + 8 digits); null until a profile exists. */
+  profileId?: string | null;
   name: string;
   email: string;
   mobileNumber: string;
@@ -428,6 +442,8 @@ export interface AdminUserSummary {
   profileStatus: string | null;
   verificationStatus: string | null;
   hasProfilePhoto: boolean | null;
+  /** Backend photo path of the primary photo; use photoSrc(url, "admin"). */
+  primaryPhotoUrl?: string | null;
 }
 
 export interface AdminUserDetail {
@@ -515,7 +531,7 @@ export interface AdminReport {
   resolvedAt: string | null;
 }
 
-export type OtpPurpose = "SIGNUP" | "LOGIN" | "FORGOT_PASSWORD" | "NEW_DEVICE" | "ACCOUNT_RECOVERY";
+export type OtpPurpose = "SIGNUP" | "LOGIN" | "FORGOT_PASSWORD" | "NEW_DEVICE" | "ACCOUNT_RECOVERY" | "ADMIN_MFA" | "CONTACT_CHANGE";
 
 // --- discovery / interactions (agent C) ------------------------------------
 /** GET /profiles/:profileId — the backend picks the shape by who is asking. */
@@ -523,6 +539,11 @@ export type ProfileViewResponse =
   | { audience: "owner" | "admin"; profile: OwnerProfile }
   | { audience: "authenticated"; profile: MemberProfile }
   | { audience: "anonymous"; profile: GatedProfile };
+
+/** GET /profiles/summaries — batched card data; an id maps to null when that profile is not visible to the viewer. */
+export interface ProfileSummariesResponse {
+  items: Record<string, Extract<ProfileViewResponse, { audience: "authenticated" }> | null>;
+}
 
 /** Result of POST /interactions/interests. */
 export interface SendInterestResult {

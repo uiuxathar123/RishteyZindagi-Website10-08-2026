@@ -3,29 +3,50 @@
 /**
  * Interest / shortlist / chat / match list endpoints only return a name and
  * a profile id for each counterpart. To show a photo, age and city on those
- * rows we read GET /profiles/:id for each distinct id (a deliberate, bounded
- * N+1 — see B16_AUDIT §11). The backend decides what is visible: a profile
- * that is not visible to the viewer answers 404 and the row falls back to
- * the name alone.
+ * rows we ask GET /profiles/summaries for all distinct ids at once (rows
+ * requested within a few milliseconds share one request; was one
+ * GET /profiles/:id per row). The backend decides what is visible: a profile
+ * that is not visible to the viewer comes back as null and the row falls
+ * back to the name alone.
  */
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api/client";
-import type { ProfileViewResponse } from "@/lib/api/types";
+import type { ProfileSummariesResponse } from "@/lib/api/types";
 import { fromProfileView, type CardProfile } from "./cardModel";
 
 export type Summary = { state: "loading" } | { state: "ok"; card: CardProfile } | { state: "unavailable" };
 
 const TTL_MS = 60_000;
-const MAX_PARALLEL = 4;
+const BATCH_WINDOW_MS = 20;
+const MAX_IDS_PER_REQUEST = 50; // matches the backend limit
 const cache = new Map<string, { at: number; card: CardProfile | null }>();
 const pending = new Map<string, Promise<CardProfile | null>>();
-const queue: Array<() => void> = [];
-let running = 0;
+const waiting = new Map<string, Array<(card: CardProfile | null) => void>>();
+let batch: string[] = [];
+let timer: ReturnType<typeof setTimeout> | null = null;
 
-function pump() {
-  while (running < MAX_PARALLEL && queue.length) {
-    running += 1;
-    queue.shift()!();
+/** Sends every id requested within the last few milliseconds as ONE request (was: one request per row). */
+function flush() {
+  timer = null;
+  const ids = batch;
+  batch = [];
+  for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
+    const chunk = ids.slice(i, i + MAX_IDS_PER_REQUEST);
+    const settle = (card: (id: string, res?: ProfileSummariesResponse) => CardProfile | null, res: ProfileSummariesResponse | undefined, remember: boolean) => {
+      for (const id of chunk) {
+        const c = card(id, res);
+        if (remember) cache.set(id, { at: Date.now(), card: c });
+        pending.delete(id);
+        const resolvers = waiting.get(id) ?? [];
+        waiting.delete(id);
+        for (const r of resolvers) r(c);
+      }
+    };
+    api
+      .get<ProfileSummariesResponse>("/profiles/summaries", { query: { ids: chunk.join(",") } })
+      .then((res) => settle((id, r) => (r?.items[id] ? fromProfileView(r.items[id]!) : null), res, true))
+      // network error / 401: show the name only, and do not cache the failure
+      .catch(() => settle(() => null, undefined, false));
   }
 }
 
@@ -35,22 +56,9 @@ function fetchOne(id: string): Promise<CardProfile | null> {
   const inflight = pending.get(id);
   if (inflight) return inflight;
   const p = new Promise<CardProfile | null>((resolve) => {
-    queue.push(() => {
-      api
-        .get<ProfileViewResponse>(`/profiles/${id}`)
-        .then((view) => {
-          const card = fromProfileView(view);
-          cache.set(id, { at: Date.now(), card });
-          resolve(card);
-        })
-        .catch(() => resolve(null)) // 404 (not visible / blocked), 403, network: show the name only
-        .finally(() => {
-          running -= 1;
-          pending.delete(id);
-          pump();
-        });
-    });
-    pump();
+    waiting.set(id, [...(waiting.get(id) ?? []), resolve]);
+    batch.push(id);
+    if (!timer) timer = setTimeout(flush, BATCH_WINDOW_MS);
   });
   pending.set(id, p);
   return p;
