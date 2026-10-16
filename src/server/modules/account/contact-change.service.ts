@@ -66,7 +66,8 @@ export async function requestContactChange(ctx: AuthContext, input: ContactChang
   const userId = requireMember(ctx);
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new AuthenticationError("Invalid or expired session.");
-  if (!(await verifyPassword(input.password, user.passwordHash))) throw new AuthenticationError("The password is incorrect.");
+  // 403, not 401: the session is valid, only the re-authentication failed. A 401 makes the BFF discard the session cookie.
+  if (!(await verifyPassword(input.password, user.passwordHash))) throw new AuthorizationError("The password is incorrect.");
 
   const n = normalise(input);
   if (input.type === "EMAIL" ? n.value === user.email : n.value === user.mobileNumber) throw new ValidationError("That is already your current " + (input.type === "EMAIL" ? "e-mail address." : "mobile number."), [{ path: "newValue", message: "Already your current value." }]);
@@ -87,11 +88,18 @@ export async function requestContactChange(ctx: AuthContext, input: ContactChang
 export async function confirmContactChange(ctx: AuthContext, input: ContactChangeInput & { code: string }, meta: Meta) {
   const userId = requireMember(ctx);
   const n = normalise(input);
-  const verified = await otpService.verifyOtpDirect(n.identifier, "CONTACT_CHANGE", input.code);
+  // A wrong code is a failed check inside a valid session: 403, never 401 (which would sign the member out in the BFF).
+  let verified: Awaited<ReturnType<typeof otpService.verifyOtpDirect>>;
+  try {
+    verified = await otpService.verifyOtpDirect(n.identifier, "CONTACT_CHANGE", input.code);
+  } catch (e) {
+    if (e instanceof AuthenticationError) throw new AuthorizationError("Invalid or expired code.");
+    throw e;
+  }
   const m = verified.metadata as { userId?: string; type?: string; newValue?: string } | null;
   // The code must have been issued to THIS member for exactly this change.
   if (verified.userId !== userId || m?.userId !== userId || m?.type !== input.type || m?.newValue !== n.value) {
-    throw new AuthenticationError("Invalid or expired code.");
+    throw new AuthorizationError("Invalid or expired code.");
   }
   await assertAvailable(userId, input.type, n.value);
 

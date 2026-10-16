@@ -36,7 +36,7 @@ describe("e-mail change", () => {
     const newEmail = `new-${Date.now()}@example.com`;
 
     expect((await request(undefined, { type: "EMAIL", newValue: newEmail, password: PW })).status).toBe(401);
-    expect((await request(m.sessionToken, { type: "EMAIL", newValue: newEmail, password: "wrong-password-1" })).status).toBe(401);
+    expect((await request(m.sessionToken, { type: "EMAIL", newValue: newEmail, password: "wrong-password-1" })).status).toBe(403); // 403, not 401: a 401 would sign the member out in the BFF
     expect(getDevOtpCode(newEmail, "CONTACT_CHANGE")).toBeUndefined(); // no code on a wrong password
 
     const r = await request(m.sessionToken, { type: "EMAIL", newValue: newEmail, password: PW });
@@ -47,11 +47,11 @@ describe("e-mail change", () => {
     expect(code).toMatch(/^\d{6}$/);
     expect(getDevOtpCode(m.email, "CONTACT_CHANGE")).toBeUndefined(); // old address got nothing
 
-    expect((await confirm(m.sessionToken, { type: "EMAIL", newValue: newEmail, code: code === "000000" ? "111111" : "000000" })).status).toBe(401);
+    expect((await confirm(m.sessionToken, { type: "EMAIL", newValue: newEmail, code: code === "000000" ? "111111" : "000000" })).status).toBe(403);
     const ok = await confirm(m.sessionToken, { type: "EMAIL", newValue: newEmail, code });
     expect(ok.status).toBe(200);
     expect((await ok.json()).data.otherSessionsRevoked).toBe(1);
-    expect((await confirm(m.sessionToken, { type: "EMAIL", newValue: newEmail, code })).status).toBe(401); // single use
+    expect((await confirm(m.sessionToken, { type: "EMAIL", newValue: newEmail, code })).status).toBe(403); // single use
 
     const [u] = await db.select().from(users).where(eq(users.id, m.userId));
     expect(u.email).toBe(newEmail);
@@ -85,7 +85,7 @@ describe("e-mail change", () => {
     expect((await request(b.sessionToken, { type: "EMAIL", newValue: target, password: PW })).status).toBe(200);
     const bCode = getDevOtpCode(target, "CONTACT_CHANGE")!;
     // member A cannot redeem member B's code for the same address
-    expect((await confirm(a.sessionToken, { type: "EMAIL", newValue: target, code: bCode })).status).toBe(401);
+    expect((await confirm(a.sessionToken, { type: "EMAIL", newValue: target, code: bCode })).status).toBe(403);
     // The account is unchanged for both members.
     const [rowA] = await db.select().from(users).where(eq(users.id, a.userId));
     expect(rowA.email).toBe(a.email);

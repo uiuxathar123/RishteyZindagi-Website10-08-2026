@@ -84,7 +84,7 @@ export function ChangeContactFlow({ kind }: { kind: Kind }) {
             <FieldLabel htmlFor={`cc-${kind}-pw`}>Your password</FieldLabel>
             <Input id={`cc-${kind}-pw`} type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
-          {request.error && <FormAlert tone="error">{request.error.kind === "unauthorized" ? "That password is not correct." : request.error.kind === "rate_limited" ? "Too many attempts. Please try again later." : request.error.firstIssue ?? request.error.friendlyMessage}</FormAlert>}
+          {request.error && <FormAlert tone="error">{request.error.kind === "forbidden" ? "That password is not correct." : request.error.kind === "rate_limited" ? "Too many attempts. Please try again later." : request.error.firstIssue ?? request.error.friendlyMessage}</FormAlert>}
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={request.pending || !value.trim() || !password}>{request.pending ? "Sending…" : "Send code"}</Button>
             <Button type="button" size="sm" variant="ghost" onClick={reset}>Cancel</Button>
@@ -97,7 +97,7 @@ export function ChangeContactFlow({ kind }: { kind: Kind }) {
             <FieldLabel htmlFor={`cc-${kind}-code`}>Verification code</FieldLabel>
             <Input id={`cc-${kind}-code`} inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />
           </div>
-          {confirm.error && <FormAlert tone="error">{confirm.error.kind === "unauthorized" ? "That code is invalid or has expired." : confirm.error.friendlyMessage}</FormAlert>}
+          {confirm.error && <FormAlert tone="error">{confirm.error.kind === "forbidden" ? "That code is invalid or has expired." : confirm.error.friendlyMessage}</FormAlert>}
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={confirm.pending || code.trim().length < 4}>{confirm.pending ? "Checking…" : "Confirm change"}</Button>
             <Button type="button" size="sm" variant="ghost" onClick={reset}>Cancel</Button>
