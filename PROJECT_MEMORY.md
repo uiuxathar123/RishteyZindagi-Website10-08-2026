@@ -1,6 +1,6 @@
 # Project Memory — RishteyZindagi.com
 
-The one page to read first. It points to the detailed documents and records the facts and rules every session should know. Updated 2026-10-17 by a read-only audit (no code changed).
+The one page to read first. It points to the detailed documents and records the facts and rules every session should know. Updated 2026-10-17 by a read-only audit; the only code change since is the owner-approved D-1 fix (`4262de9`).
 
 ## What it is
 
@@ -10,8 +10,8 @@ A premium Indian + NRI matrimonial platform. One Next.js 14 (App Router) + TypeS
 
 | Fact | Value |
 |---|---|
-| Repository | `https://github.com/uiuxathar123/RishteyZindagi-Website10-08-2026.git`, branch `main` (14 commits, head `5778152`, 2026-10-13) |
-| Tracked files | 847 |
+| Repository | `https://github.com/uiuxathar123/RishteyZindagi-Website10-08-2026.git`, branch `main` (15 commits, head `4262de9`, 2026-10-17, one commit ahead of `origin/main`, not pushed) |
+| Tracked files | 849 at `4262de9` (the documentation commit that follows adds the eight other audit documents in `docs/`) |
 | API | 167 route files, 203 handlers, all wrapped in `withErrorHandling` |
 | UI pages | 51 (`page.tsx`): 21 public, 11 member, 19 admin |
 | Database | 66 tables, 18 enums, 19 migrations (`drizzle/0000`–`0018`) |
@@ -27,7 +27,7 @@ A premium Indian + NRI matrimonial platform. One Next.js 14 (App Router) + TypeS
 2. The backend is the authority: every permission, ownership and membership rule is enforced in services, not the UI.
 3. Follow the existing pattern: `route.ts` (thin) → controller (zod + `authenticate`) → service (rules, `requirePermission`, `record()` audit) → repository (Drizzle).
 4. Migrations are additive, new files in `drizzle/`. Never edit an applied migration.
-5. Return **403, not 401,** for a failed re-check inside a valid session (wrong current password, wrong code). A 401 makes the BFF sign the user out. (`contact-change` broke this rule until the D-1 fix of 2026-10-18.)
+5. Return **403, not 401,** for a failed re-check inside a valid session (wrong current password, wrong code). A 401 makes the BFF sign the user out. (`contact-change` broke this rule until the D-1 fix in commit `4262de9`, 2026-10-17.)
 6. Use `getClientIp()` for client IPs, `getEnv()` for configuration, `ok()`/`AppError` subclasses for responses.
 7. Don't claim something works live or performs well without evidence; this project's documents separate "mock-verified" from "verified".
 8. Owner approval before implementation, commits or pushes.
@@ -50,11 +50,11 @@ A premium Indian + NRI matrimonial platform. One Next.js 14 (App Router) + TypeS
 
 ## Audit status
 
-**Not complete.** 108 files read in full, 73 outlined, 166 API routes pattern-verified, 469 still pending (mostly UI components, tests and older documents). Next steps are in `docs/NEXT_SESSION_HANDOVER.md` §4.
+**Not complete.** 110 files read in full, 73 outlined, 166 API routes pattern-verified, 469 still pending (mostly UI components, tests and older documents). Next steps are in `docs/NEXT_SESSION_HANDOVER.md` §4.
 
 ## Top open items (details in `docs/DECISIONS_AND_CHANGELOG.md`)
 
-* D-1: wrong password during e-mail/mobile change signed the member out. Fixed 2026-10-18, pending commit.
+* D-1: wrong password during e-mail/mobile change signed the member out. Fixed in `4262de9` (2026-10-17, not pushed); full-suite and browser checks still to do.
 * D-2: admin MFA off by default; admin sessions last 30 days.
 * D-3: interests require a paid membership in code, but B18 docs say free.
 * D-5 / D-6: invoices not GST-ready; payment SUCCESS is committed before membership activation.

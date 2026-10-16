@@ -12,7 +12,7 @@ Evidence levels:
 
 | ID | Finding | Evidence | Level | Suggested direction (needs approval) |
 |---|---|---|---|---|
-| D-1 | **Member is signed out when they mistype their password (or code) while changing e-mail or mobile.** `contact-change.service.ts` throws `AuthenticationError` (401) for a wrong password. The BFF clears the session cookie on any 401 from an authenticated call, and the browser client's 401 handler redirects to login. Account deletion and the admin password change deliberately use 403 to avoid exactly this. | `src/server/modules/account/contact-change.service.ts:69`; `src/app/bff/[...path]/route.ts:172`; `src/lib/api/client.ts:47`; contrast `account-deletion.service.ts:81`, `staff.service.ts` `changeMyPassword`. The test asserts 401: `tests/b19-contact-change.test.ts:39`, `:50`. | Confirmed | **Fixed 2026-10-18 (not yet committed):** wrong password and wrong/mismatched code now return 403; UI messages and test updated. |
+| D-1 | **(Fixed.) Member was signed out when they mistyped their password (or code) while changing e-mail or mobile.** Before the fix, `contact-change.service.ts` threw `AuthenticationError` (401) for a wrong password. The BFF clears the session cookie on any 401 from an authenticated call, and the browser client's 401 handler redirects to login. Account deletion and the admin password change deliberately use 403 to avoid exactly this. | Before the fix: `src/server/modules/account/contact-change.service.ts:69` (now line 70, returning 403); `src/app/bff/[...path]/route.ts:172`; `src/lib/api/client.ts:47`; contrast `account-deletion.service.ts:81`, `staff.service.ts` `changeMyPassword`. The test then asserted 401 (`tests/b19-contact-change.test.ts:39`, `:50`); it now asserts 403. | Confirmed | **Fixed in commit `4262de9` (2026-10-17, not pushed):** wrong password and wrong/mismatched code now return 403; UI messages and test updated. |
 | D-2 | **Admin protection defaults are weak for production.** Admin MFA (e-mail code) is off by default. Admin sessions use the same lifetime as members, 720 hours (30 days). | `platform-settings.service.ts:390` (`mfaRequired: false`); `src/server/config/env.ts:16` (`SESSION_TTL_HOURS` default 720), used by `admin.service.ts` `openAdminSession`. | From code | Turn MFA on before launch (needs working SMTP). Consider a shorter admin session TTL. |
 | D-3 | **Documentation and code disagree on interests.** Sending a new interest requires an active (paid) membership. `B18_FINAL_REPORT.md` says interests "stay open to every member". | `src/server/modules/interactions/interactions.service.ts:180`; test `[interest-requires-membership]` in `tests/interactions.test.ts:110`; doc `B18_FINAL_REPORT.md:9`. | Confirmed | Owner decides which is intended, then fix either the code or the document. |
 | D-4 | **Staff Admins see revenue.** Dashboard totals and 7–90 day trends, including revenue by currency, are gated by `users.view`, which `STAFF_ADMIN` receives by default. | `src/server/modules/admin/dashboard.service.ts:13`; `src/server/db/seed.ts:83`. | Business | If revenue should be Super-Admin-only, gate it behind `payments.review` or a new permission. |
@@ -40,12 +40,16 @@ Evidence levels:
 
 ## B. Changelog
 
-### 2026-10-18 — D-1 fix (approved by owner)
+### 2026-10-17 — D-1 fix (approved by owner), commit `4262de9`
 
 * `contact-change.service.ts`: a wrong current password, a wrong or expired code, and a code issued for a different member/value now throw `AuthorizationError` (403) instead of `AuthenticationError` (401), so the BFF no longer signs the member out. A missing or invalid session still returns 401.
 * `ChangeContactFlow.tsx`: the friendly "password not correct" / "code invalid" messages now key on `forbidden`.
 * `tests/b19-contact-change.test.ts`: four expectations changed from 401 to 403.
-* Verified: `npx vitest run tests/b19-contact-change.test.ts` 4/4 passed; `npx tsc --noEmit` exit 0.
+* Verified: `npx vitest run tests/b19-contact-change.test.ts` 4/4 passed; `npx tsc --noEmit` exit 0. Not yet run: the full suite and a browser check of the change-contact form.
+
+### 2026-10-17 — Corrections after auditing the audit documents
+
+* An owner-requested review of the eight uncommitted documents found stale statements after the D-1 commit (open-bug wording, "nothing re-run", old `HEAD`), a wrong date (2026-10-18 instead of 2026-10-17) in this file and `PROJECT_MEMORY.md`, and a few inaccurate claims (plan `features` usage, test pass count, client-component ratio, checklist coverage). All were corrected in documentation only; no code changed.
 
 ### 2026-10-17 — Read-only audit and documentation handover
 
