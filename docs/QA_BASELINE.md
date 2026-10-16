@@ -102,3 +102,66 @@ Mapping is by file name and, for files marked READ/OUTLINED in the checklist, by
 4. `npm run smoke:prod` and `smoke:gateway` against a production build.
 5. Manual flows in a browser: sign-up with OTP; login from a new device; e-mail change with a wrong password and a wrong code (must stay signed in; D-1 fix); search with and without a plan; interest → accept → chat; checkout in Razorpay **test** mode; invoice download; account deletion and recovery; Super Admin settings; Staff Admin permission limits.
 6. Live vendor checks with test credentials, per `PAYMENT_SETUP.md`, `FAST2SMS_SETUP.md`, `PROVIDER_TEST_SETUP.md`.
+
+## 7. QA log
+
+Dated entries, newest last. Earlier sections describe the state before each entry and are kept as written.
+
+### 2026-10-17 — Full suite at `4262de9`/`f845812`, D-1 browser QA, login-timing investigation
+
+**Status: the full suite is NOT green.** `npm test` exited 1 because of one timing assertion. Isolated reruns of that file passed, but the full run itself did not.
+
+#### Verified observations
+
+Full suite (one run, 01:00:29–01:31:23 IST, local test database `rishteyzindagi_test`):
+
+| Measure | Result |
+|---|---|
+| Command | `npm test` (`vitest run`) |
+| Exit code | **1** |
+| Test files | 91: 89 passed, 1 failed, 1 skipped |
+| Tests | 820: **799 passed, 1 failed, 20 skipped** |
+| Duration | 1,850.4 s (about 30.8 minutes) |
+| Only failure | `tests/performance-load.test.ts` › `[perf-load-login] POST /auth/login`: `AssertionError: expected 3716 to be less than 3000` at line 238 |
+| Other performance checks | The other 8 checks in `performance-load.test.ts` passed, as did `perf-query-counts`, `performance-concurrency`, `performance-pagination-stability` and `performance-redundant-indexes` |
+| Skips | 12 in `pcp-backup` and 8 in `pcp-storage`: the backup tools (`pg_dump`, `pg_restore`, `psql`, `gpg`) and the `moto_server` S3 mock are not installed |
+| Server 5xx in test request logs | 15, in passing tests: 14 × 503 (webhooks, checkout, refunds, Razorpay resume, register, profile update, search) and 1 × 500 (`/admin/matching/weights`, a missing `matching_weight_configs` row during `b18-permission-matrix`, also logged once on 2026-10-11). The 2026-10-11 run logged 17 in total. Whether each one is intended was not checked test by test. |
+| `npx tsc --noEmit` | exit 0 |
+
+The test count rose from 814 (2026-10-11) to 820.
+
+Login-timing investigation:
+
+* **What the test measures:** 20 logins in 4 waves of 5 concurrent requests; p95 is the nearest-rank value (19th of 20). Each login is dominated by one `bcryptjs` cost-12 comparison.
+* **Standalone check (no database, nothing else running):** one comparison took 320–342 ms (median 330 ms over 10). Five concurrent comparisons took 1.61–1.65 s of wall time with CPU time equal to wall time, so they run one after another on Node's single JavaScript thread, and a wave costs about 5 × one comparison.
+* **Failing full-suite run:** the four waves took 1.79, 3.14, 3.15 and 3.71 s, all between 01:19:32 and 01:19:44 IST, in the same process. In the 2026-10-11 passing run every wave took about 1.6 s (p95 1,627 ms).
+* **The rest of the same file was also slower:** p50 for search was 272 ms (80 ms on 2026-10-11), recommendations 62 ms (22 ms), notifications 29 ms (9 ms).
+* **No login-path change:** none of the login route, auth controller and service, users repository, password and session libraries, error-handling and rate-limit middleware, maintenance gate, audit service, database client, logger, the test file, its helpers, `vitest.config.ts` or `package-lock.json` changed between the passing run and this one.
+* **Three isolated reruns** of `npx vitest run tests/performance-load.test.ts` (01:34–01:35 IST, nothing else running): each passed 9/9, with login p95 of 1,674, 1,683 and 1,696 ms against the 3,000 ms threshold.
+
+D-1 browser QA (local dev server, a new `@example.com` QA member, SMTP not configured and dev-OTP mode on, so no e-mail or SMS was sent):
+
+| Check | Result |
+|---|---|
+| Contact-change form loads in Settings | PASS |
+| Empty fields keep "Send code" disabled | PASS |
+| Malformed e-mail rejected (400, "A valid e-mail address is required.") | PASS |
+| Wrong password returns 403 with "That password is not correct." and the member stays signed in (e-mail and mobile) | PASS |
+| Wrong code returns 403 with "That code is invalid or has expired." and the member stays signed in | PASS |
+| Correct code updates the e-mail / mobile and marks it verified | PASS |
+| The other session is revoked (401); the current session is kept | PASS |
+| A used code cannot be reused (403, still signed in) | PASS |
+| The old e-mail can no longer sign in; the new one can | PASS |
+| Server errors | None: no 5xx in the browser or the dev-server log |
+
+Minor findings, not D-1 failures: a 2-digit mobile number shows the raw validator text "Too small: expected string to have >=3 characters", and the change-password text briefly reads "sent to ." while the page loads.
+
+#### Interpretation
+
+* **Best-supported explanation:** a temporary slowdown of the machine or Node runtime during that window. The same code, in the same process, slowed down mid-test (one wave at normal speed, three waves about 2× slower), endpoints that do not use bcrypt slowed by a similar factor, and isolated reruns were back to normal. There is no evidence of an application-code, database or test-logic regression.
+* **Not confirmed:** the specific cause of the slowdown. Hypotheses, none verified: Windows moving the process onto a slower core of this hybrid i7-12650H; reduced clock speed under the Balanced power plan (a snapshot afterwards showed the CPU at 50–77% of base speed while mostly idle, on AC power); brief load from other programs.
+* **Test design:** this check depends on single-thread CPU speed. The normal p95 on this machine is about 1.7 s, so it fails whenever that speed drops by about 1.8× or more for a few seconds. Its code comment ("Isolated P95 is ~2.7s") does not match what this machine measures. No threshold or test was changed.
+
+#### Next action (not done)
+
+Re-run the full suite on a quiet machine before the next release. If the timing check fails again, consider making it less sensitive to machine speed (owner decision).
