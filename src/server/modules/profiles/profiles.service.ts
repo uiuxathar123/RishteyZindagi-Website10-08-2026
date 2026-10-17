@@ -137,6 +137,37 @@ export async function resolveLookups(profile: ProfileRow): Promise<ResolvedLooku
   };
 }
 
+/** Batched form of resolveLookups for a page of profiles: one query per lookup table that is
+ * actually needed (none at all for an empty page) instead of up to eight per profile. Returns an
+ * entry for every given profile, with exactly the values resolveLookups would return for it. */
+export async function resolveLookupsForProfiles(profileRows: ProfileRow[]): Promise<Map<string, ResolvedLookups>> {
+  const need = (pick: (p: ProfileRow) => string | null) => [...new Set(profileRows.map(pick).filter((x): x is string => !!x))];
+  const maps = await referenceRepo.getLookupMapsByIds({
+    maritalStatus: need((p) => p.maritalStatusId),
+    religion: need((p) => p.religionId),
+    community: need((p) => p.communityId),
+    motherTongue: need((p) => p.motherTongueId),
+    education: need((p) => p.educationId),
+    profession: need((p) => p.professionId),
+    country: need((p) => p.countryId),
+    city: need((p) => p.cityId),
+  });
+  const out = new Map<string, ResolvedLookups>();
+  for (const p of profileRows) {
+    out.set(p.id, {
+      maritalStatus: (p.maritalStatusId && maps.maritalStatus.get(p.maritalStatusId)) || null,
+      religion: (p.religionId && maps.religion.get(p.religionId)) || null,
+      community: (p.communityId && maps.community.get(p.communityId)) || null,
+      motherTongue: (p.motherTongueId && maps.motherTongue.get(p.motherTongueId)) || null,
+      education: (p.educationId && maps.education.get(p.educationId)) || null,
+      profession: (p.professionId && maps.profession.get(p.professionId)) || null,
+      country: (p.countryId && maps.country.get(p.countryId)) || null,
+      city: (p.cityId && maps.city.get(p.cityId)) || null,
+    });
+  }
+  return out;
+}
+
 /** Recomputes and persists profileCompletionPercent / missingRequiredFields
  * / hasProfilePhoto / profileStatus from the current row + live photo
  * count. Called after every mutation that could change any of them
@@ -639,36 +670,14 @@ export async function getProfileSummaries(viewer: AuthContext, profileIds: strin
   });
   if (visible.length === 0) return result;
 
-  const need = (pick: (p: ProfileRow) => string | null) => [...new Set(visible.map((f) => pick(f.profile)).filter((x): x is string => !!x))];
-  const [maps, extras] = await Promise.all([
-    referenceRepo.getLookupMapsByIds({
-      maritalStatus: need((p) => p.maritalStatusId),
-      religion: need((p) => p.religionId),
-      community: need((p) => p.communityId),
-      motherTongue: need((p) => p.motherTongueId),
-      education: need((p) => p.educationId),
-      profession: need((p) => p.professionId),
-      country: need((p) => p.countryId),
-      city: need((p) => p.cityId),
-    }),
-    viewerExtrasFor(viewerUserId, visible.map((f) => f.profile)),
-  ]);
+  const visibleProfiles = visible.map((f) => f.profile);
+  const [lookupsByProfile, extras] = await Promise.all([resolveLookupsForProfiles(visibleProfiles), viewerExtrasFor(viewerUserId, visibleProfiles)]);
 
   for (const f of visible) {
     const p = f.profile;
-    const lookups: ResolvedLookups = {
-      maritalStatus: (p.maritalStatusId && maps.maritalStatus.get(p.maritalStatusId)) || null,
-      religion: (p.religionId && maps.religion.get(p.religionId)) || null,
-      community: (p.communityId && maps.community.get(p.communityId)) || null,
-      motherTongue: (p.motherTongueId && maps.motherTongue.get(p.motherTongueId)) || null,
-      education: (p.educationId && maps.education.get(p.educationId)) || null,
-      profession: (p.professionId && maps.profession.get(p.professionId)) || null,
-      country: (p.countryId && maps.country.get(p.countryId)) || null,
-      city: (p.cityId && maps.city.get(p.cityId)) || null,
-    };
     result[p.id] = {
       audience: "authenticated",
-      profile: toAuthenticatedPublicView(p, f.displayName, lookups, photosByProfile.get(p.id) ?? [], extras.get(p.id)),
+      profile: toAuthenticatedPublicView(p, f.displayName, lookupsByProfile.get(p.id)!, photosByProfile.get(p.id) ?? [], extras.get(p.id)),
     };
   }
   return result;

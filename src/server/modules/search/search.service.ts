@@ -11,7 +11,7 @@ import { getSearchSettings } from "@/server/modules/platform-settings/platform-s
 import type { AuthContext } from "@/server/middleware/authenticate";
 import * as profilesRepo from "@/server/modules/profiles/profiles.repository";
 import * as referenceRepo from "@/server/modules/profiles/reference.repository";
-import { resolveLookups } from "@/server/modules/profiles/profiles.service";
+import { resolveLookupsForProfiles } from "@/server/modules/profiles/profiles.service";
 import { viewerExtrasFor } from "@/server/modules/profiles/privacy";
 import {
   toAuthenticatedPublicView,
@@ -132,16 +132,22 @@ export async function searchProfiles(viewer: AuthContext | null, input: SearchIn
     sortDir,
   });
 
-  const extras = viewer && viewer.subject.type === "user" ? await viewerExtrasFor(viewer.subject.id, items.map((i) => i.profile)) : new Map();
-  const results = await Promise.all(
-    items.map(async (row): Promise<SearchResultProfile> => {
-      const [lookups, photos] = await Promise.all([resolveLookups(row.profile), profilesRepo.listPhotos(row.profile.id)]);
-      if (viewer) {
-        return { audience: "authenticated", profile: toAuthenticatedPublicView(row.profile, row.displayName, lookups, photos, extras.get(row.profile.id)) };
-      }
-      return { audience: "anonymous", profile: toAnonymousGatedView(row.profile, lookups, photos.length > 0) };
-    })
-  );
+  // Lookups and photos for the whole page are fetched in batches (one query per lookup table and
+  // one for photos) rather than per row, so the query count does not grow with the page size.
+  const pageProfiles = items.map((i) => i.profile);
+  const [extras, lookupsByProfile, photosByProfile] = await Promise.all([
+    viewer && viewer.subject.type === "user" ? viewerExtrasFor(viewer.subject.id, pageProfiles) : Promise.resolve(new Map()),
+    resolveLookupsForProfiles(pageProfiles),
+    profilesRepo.listPhotosForProfiles(pageProfiles.map((p) => p.id)),
+  ]);
+  const results = items.map((row): SearchResultProfile => {
+    const lookups = lookupsByProfile.get(row.profile.id)!;
+    const photos = photosByProfile.get(row.profile.id) ?? [];
+    if (viewer) {
+      return { audience: "authenticated", profile: toAuthenticatedPublicView(row.profile, row.displayName, lookups, photos, extras.get(row.profile.id)) };
+    }
+    return { audience: "anonymous", profile: toAnonymousGatedView(row.profile, lookups, photos.length > 0) };
+  });
 
   return {
     items: results,

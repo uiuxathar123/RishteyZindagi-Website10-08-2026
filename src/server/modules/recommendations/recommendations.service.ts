@@ -36,9 +36,10 @@
 import { NotFoundError, AuthorizationError } from "@/server/lib/errors";
 import type { AuthContext } from "@/server/middleware/authenticate";
 import * as profilesRepo from "@/server/modules/profiles/profiles.repository";
+import type { ProfilePhotoRow } from "@/server/modules/profiles/profiles.repository";
 import * as preferencesRepo from "@/server/modules/preferences/preferences.repository";
-import { resolveLookups } from "@/server/modules/profiles/profiles.service";
-import { toAuthenticatedPublicView } from "@/server/modules/profiles/profiles.dto";
+import { resolveLookupsForProfiles } from "@/server/modules/profiles/profiles.service";
+import { toAuthenticatedPublicView, type ResolvedLookups } from "@/server/modules/profiles/profiles.dto";
 import * as recommendationsRepo from "./recommendations.repository";
 import type { CandidateRow } from "./recommendations.repository";
 import { scoreCandidate, classifyTier, type CompatibilityResult } from "./scoring";
@@ -136,8 +137,14 @@ function byScoreThenId(a: { candidate: CandidateRow; result: CompatibilityResult
   return aId < bId ? -1 : aId > bId ? 1 : 0;
 }
 
-async function toItem(candidate: CandidateRow, result: CompatibilityResult, tier: "PRIMARY" | "SECONDARY", extras?: ViewerExtras): Promise<RecommendationItem> {
-  const [lookups, photos] = await Promise.all([resolveLookups(candidate.profile), profilesRepo.listPhotos(candidate.profile.id)]);
+function toItem(
+  candidate: CandidateRow,
+  result: CompatibilityResult,
+  tier: "PRIMARY" | "SECONDARY",
+  lookups: ResolvedLookups,
+  photos: ProfilePhotoRow[],
+  extras?: ViewerExtras
+): RecommendationItem {
   const profileView = toAuthenticatedPublicView(candidate.profile, candidate.displayName, lookups, photos, extras);
   return toRecommendationItem(profileView, result.score, result.breakdown, tier);
 }
@@ -245,11 +252,25 @@ export async function getMyRecommendations(ctx: AuthContext, input: Recommendati
   const secondaryTotal = secondaryFiltered.length;
   const secondarySlice = secondaryFiltered.slice(0, MAX_SECONDARY_ITEMS);
 
-  const extras = await viewerExtrasFor(userId, [...primaryPageSlice, ...secondarySlice].map(({ candidate }) => candidate.profile));
-  const [items, secondaryItems] = await Promise.all([
-    Promise.all(primaryPageSlice.map(({ candidate, result }) => toItem(candidate, result, "PRIMARY", extras.get(candidate.profile.id)))),
-    Promise.all(secondarySlice.map(({ candidate, result }) => toItem(candidate, result, "SECONDARY", extras.get(candidate.profile.id)))),
+  // Card data for every profile shown (both tiers) is fetched in batches: one query per lookup
+  // table and one for photos, instead of up to nine per card.
+  const shownProfiles = [...primaryPageSlice, ...secondarySlice].map(({ candidate }) => candidate.profile);
+  const [extras, lookupsByProfile, photosByProfile] = await Promise.all([
+    viewerExtrasFor(userId, shownProfiles),
+    resolveLookupsForProfiles(shownProfiles),
+    profilesRepo.listPhotosForProfiles(shownProfiles.map((p) => p.id)),
   ]);
+  const build = (tier: "PRIMARY" | "SECONDARY") => ({ candidate, result }: { candidate: CandidateRow; result: CompatibilityResult }) =>
+    toItem(
+      candidate,
+      result,
+      tier,
+      lookupsByProfile.get(candidate.profile.id)!,
+      photosByProfile.get(candidate.profile.id) ?? [],
+      extras.get(candidate.profile.id)
+    );
+  const items = primaryPageSlice.map(build("PRIMARY"));
+  const secondaryItems = secondarySlice.map(build("SECONDARY"));
 
   return { status: "ok", items, secondaryItems, secondaryTotal, page, pageSize, total, totalPages };
 }
