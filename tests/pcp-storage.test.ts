@@ -6,7 +6,7 @@
  * our hand-written signer. If moto is not installed the S3 integration block is SKIPPED
  * (reported as skipped, never as passed). A real AWS/MinIO/R2 bucket is NOT contacted.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { spawn, spawnSync, type ChildProcess } from "child_process";
 import path from "path";
 import net from "net";
@@ -181,9 +181,40 @@ describe.skipIf(!hasMoto)("S3 provider vs moto (independent SigV4 verification)"
     await s3.delete(key);
   });
 
-  it("[s3-health-and-traversal] health check passes with good credentials; hostile keys never reach the network", async () => {
+  it("[s3-health] health check passes with good credentials", async () => {
     const s3 = await provider();
     expect((await s3.healthCheck()).ok).toBe(true);
+  });
+});
+
+// These checks fail before any request is sent (missing settings, an http endpoint in production,
+// a hostile key) or never send one (provider selection), so they need no moto server and always run.
+// The endpoint points at the moto port with nothing listening: had a request been sent, it would
+// fail with "could not be reached" instead of the error each test expects.
+describe("S3 provider checks that need no server", () => {
+  async function provider(over: Record<string, string> = {}) {
+    vi.resetModules();
+    vi.stubEnv("STORAGE_PROVIDER", "s3");
+    vi.stubEnv("STORAGE_BUCKET", BUCKET);
+    vi.stubEnv("S3_ENDPOINT", `http://127.0.0.1:${PORT}`);
+    vi.stubEnv("S3_REGION", "us-east-1");
+    vi.stubEnv("S3_FORCE_PATH_STYLE", "true");
+    vi.stubEnv("S3_ACCESS_KEY_ID", "test-access-key-id");
+    vi.stubEnv("S3_SECRET_ACCESS_KEY", "test-secret-access-key");
+    for (const [k, v] of Object.entries(over)) vi.stubEnv(k, v);
+    const { S3StorageProvider } = await import("@/server/modules/storage/s3.provider");
+    return new S3StorageProvider();
+  }
+
+  // Each test starts from the real environment and fresh modules (getEnv and the provider factory
+  // cache what they read), so no test depends on another's stubs or on the order they run in.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("[s3-traversal] hostile keys never reach the network", async () => {
+    const s3 = await provider();
     await expect(s3.read("../../etc/passwd")).rejects.toThrow(/Invalid storage key/);
     await expect(s3.upload({ key: "/abs", buffer: Buffer.from("x"), contentType: "text/plain" })).rejects.toThrow(/Invalid storage key/);
   });
