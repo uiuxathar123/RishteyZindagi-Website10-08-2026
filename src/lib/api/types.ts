@@ -27,7 +27,7 @@ export interface ReferenceOptions {
   countries: Array<LookupRow & { isoCode?: string }>;
   /** Present when `religionId` was supplied. Names are "<sect> › <group>". */
   communities?: LookupRow[];
-  /** Present when `countryId` was supplied. */
+  /** Present when `countryId` or `countryIso` was supplied. */
   cities?: LookupRow[];
 }
 

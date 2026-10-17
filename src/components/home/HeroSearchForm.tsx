@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldLabel, Select } from "@/components/ui/Input";
 import { useReference } from "@/lib/api/lookups";
 import type { LookupRow } from "@/lib/api/types";
+import { HOME_REFERENCE_QUERY } from "./browseLookups";
 
 const AGE_BANDS = [
   { value: "21-25", label: "21 – 25", min: 21, max: 25 },
@@ -38,7 +39,8 @@ function Options({ rows, loading }: { rows?: LookupRow[]; loading: boolean }) {
  */
 export function HeroSearchForm() {
   const router = useRouter();
-  const ref = useReference();
+  // Same request as the "browse by" sections below, so the homepage fetches reference data once.
+  const ref = useReference(HOME_REFERENCE_QUERY);
   const [gender, setGender] = useState("");
   const [age, setAge] = useState("");
   const [religionId, setReligionId] = useState("");

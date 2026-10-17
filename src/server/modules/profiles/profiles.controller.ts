@@ -279,6 +279,9 @@ const referenceOptionsQuerySchema = z.object({
   religionId: uuidField.optional(),
 });
 
+/** ISO 3166-1 alpha-2 code, e.g. "IN": asks for a country's cities without first looking up its id. */
+const countryIsoField = z.string().regex(/^[A-Za-z]{2}$/);
+
 export async function getProfileReferenceOptionsHandler(req: NextRequest) {
   checkRateLimit(`reference-options:${ipKey(req)}`, 120, 60_000);
   const url = new URL(req.url);
@@ -286,6 +289,15 @@ export async function getProfileReferenceOptionsHandler(req: NextRequest) {
     countryId: url.searchParams.get("countryId") ?? undefined,
     religionId: url.searchParams.get("religionId") ?? undefined,
   });
-  const options = await profilesService.getProfileReferenceOptions(countryId, religionId);
+  const countryIsoValues = url.searchParams.getAll("countryIso");
+  let countryIso: string | undefined;
+  if (countryIsoValues.length > 0) {
+    if (countryId) throw new ValidationError("Send either countryId or countryIso, not both.");
+    if (countryIsoValues.length > 1) throw new ValidationError("Send countryIso only once.");
+    const parsed = countryIsoField.safeParse(countryIsoValues[0]);
+    if (!parsed.success) throw new ValidationError("countryIso must be a two-letter ISO 3166-1 country code.");
+    countryIso = parsed.data.toUpperCase();
+  }
+  const options = await profilesService.getProfileReferenceOptions(countryId, religionId, countryIso);
   return ok(options);
 }

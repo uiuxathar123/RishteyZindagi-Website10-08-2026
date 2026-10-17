@@ -20,6 +20,9 @@ export function pickPreferred(rows: LookupRow[] | undefined, preferred: string[]
   return chosen.slice(0, max);
 }
 
+/** The one reference request every homepage section shares: the base lists plus India's cities. */
+export const HOME_REFERENCE_QUERY = { countryIso: "IN" } as const;
+
 /** Backend reference data for the "browse by" shortcuts (religions, countries, professions, Indian cities…). */
 export function useBrowseLookups(): {
   loading: boolean;
@@ -28,14 +31,13 @@ export function useBrowseLookups(): {
   india: LookupRow | undefined;
   indianCities: LookupRow[];
 } {
-  const base = useReference();
-  const india = base.data?.countries.find((c) => c.name === "India");
-  const withCities = useReference({ countryId: india?.id });
+  const ref = useReference(HOME_REFERENCE_QUERY);
+  const india = ref.data?.countries.find((c) => c.isoCode?.toUpperCase() === HOME_REFERENCE_QUERY.countryIso);
   return {
-    loading: base.loading,
-    failed: !!base.error,
-    base: base.data,
+    loading: ref.loading,
+    failed: !!ref.error,
+    base: ref.data,
     india,
-    indianCities: india ? withCities.data?.cities ?? [] : [],
+    indianCities: india ? ref.data?.cities ?? [] : [],
   };
 }

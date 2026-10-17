@@ -601,6 +601,16 @@ statuses; cities for the given `countryId`, communities for the given
 `religionId` when supplied). Used to populate dropdowns client-side
 without hardcoding ids.
 
+Optional `countryIso` (`?countryIso=IN`): a two-letter ISO 3166-1
+alpha-2 code, case-insensitive, used instead of `countryId` when the
+caller does not know the country's id. The response is the same as for
+that country's `countryId`: the lists above plus its `cities`. It can be
+combined with `religionId`. Sending both `countryIso` and `countryId`,
+or a code that is not two letters, → `400 VALIDATION_ERROR`. A
+well-formed code that no country has → `200` with `cities: []`, as an
+unknown `countryId` gives. Send countryIso once; repeating it returns 400
+VALIDATION_ERROR.
+
 ---
 
 ## 17. Health

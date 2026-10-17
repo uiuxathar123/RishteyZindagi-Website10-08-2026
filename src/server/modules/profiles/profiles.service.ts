@@ -780,8 +780,15 @@ export interface ProfileReferenceOptions {
  * during signup). `countryId`/`religionId` optionally include that
  * country's seeded cities / that religion's seeded communities — the
  * full open-ended sets are still reachable via findOrCreate on write,
- * per reference.repository.ts. */
-export async function getProfileReferenceOptions(countryId?: string, religionId?: string): Promise<ProfileReferenceOptions> {
+ * per reference.repository.ts. `countryIso` (an upper-case ISO 3166-1
+ * alpha-2 code) is an alternative to `countryId` for callers that do not
+ * know the country's id; an unknown code gives an empty city list, as an
+ * unknown `countryId` does. */
+export async function getProfileReferenceOptions(
+  countryId?: string,
+  religionId?: string,
+  countryIso?: string
+): Promise<ProfileReferenceOptions> {
   const [religionsList, motherTonguesList, educationsList, professionsList, maritalStatusesList, countriesList] =
     await Promise.all([
       referenceRepo.listReligions(),
@@ -802,6 +809,11 @@ export async function getProfileReferenceOptions(countryId?: string, religionId?
   };
 
   if (countryId) result.cities = await referenceRepo.listCitiesForCountry(countryId);
+  else if (countryIso) {
+    // Resolved against the countries already loaded above, so the code costs no extra query.
+    const country = countriesList.find((c) => c.isoCode?.toUpperCase() === countryIso);
+    result.cities = country ? await referenceRepo.listCitiesForCountry(country.id) : [];
+  }
   if (religionId) result.communities = await referenceRepo.listCommunitiesForReligion(religionId);
 
   return result;
