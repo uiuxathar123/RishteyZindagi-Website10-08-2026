@@ -125,6 +125,8 @@ export interface OwnerProfile {
   familyDetails: FamilyDetails | null;
   verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
   verifiedAt: string | null;
+  /** "Company Verified" — approved by the RishteyZindagi team's own review. */
+  companyVerified?: boolean;
   profileCompletionPercent: number;
   missingRequiredFields: string[];
   profileStatus: "INCOMPLETE" | "COMPLETE" | "READY_FOR_VISIBILITY";
@@ -168,6 +170,7 @@ export interface MemberProfile {
   city: string | null;
   aboutMe: string | null;
   verificationStatus: string;
+  companyVerified?: boolean;
   photos: PublicPhoto[];
   /** B18: true when the owner limited photos to accepted connections and you are not one. */
   photosRestricted?: boolean;
@@ -185,6 +188,7 @@ export interface GatedProfile {
   education: string | null;
   profession: string | null;
   verificationStatus: string;
+  companyVerified?: boolean;
   photoBlurred: boolean;
 }
 
@@ -343,6 +347,8 @@ export interface MyMembership {
   isActive: boolean;
   /** B18: what the current plan unlocks (advanced search filters). */
   entitlements?: { advancedSearch: boolean };
+  /** Interests and chat included with Personal Matchmaking (not a plan), while running. */
+  includedAccess?: { until: string } | null;
 }
 
 export interface CheckoutResult {
@@ -361,6 +367,8 @@ export interface CheckoutResult {
 export interface PaymentView {
   id: string;
   membershipId: string | null;
+  /** Set when the payment is for Personal Matchmaking instead of a membership. */
+  matchmakingCaseId?: string | null;
   gatewayId: string;
   amountInPaise: number;
   currency: string;

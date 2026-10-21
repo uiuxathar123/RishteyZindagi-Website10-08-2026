@@ -40,6 +40,7 @@ import * as membershipsRepo from "@/server/modules/memberships/memberships.repos
 import { tierRank } from "@/server/modules/memberships/plan-tiers";
 import { issueInvoice } from "@/server/modules/invoices/invoices.service";
 import { isPaymentDevMode } from "./dev-mode";
+import { fulfilMatchmakingPayment } from "@/server/modules/matchmaking/matchmaking-fulfilment";
 
 const ADMIN_PERMISSION = "payments.review";
 // B13 (Performance/Scalability phase): same admin-list pagination
@@ -127,24 +128,84 @@ export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<
   // activation waits for verify, not checkout.
   const membership = await membershipsRepo.createPending({ userId, planId: plan.id, autoRenew: Boolean(input.autoRenew) });
 
-  const payment = await paymentsRepo.createPayment({
+  const order = await openGatewayOrder({
     userId,
-    membershipId: membership.id,
-    gatewayId: gatewayRow.id,
+    purpose: { membershipId: membership.id },
+    gatewayRow,
     amountInPaise: plan.priceInPaise,
     currency: plan.currency,
+    devSimulateOutcome: input.devSimulateOutcome,
+    onOrderFailure: async () => {
+      await membershipsRepo.cancel(membership.id);
+    },
   });
 
+  return { ...order, membershipId: membership.id };
+}
+
+export interface OpenGatewayOrderInput {
+  userId: string;
+  purpose: paymentsRepo.PaymentPurpose;
+  gatewayRow: Awaited<ReturnType<typeof getActiveGatewayRow>>;
+  /** Always server-derived (a plan price or the Personal Matchmaking setting) — never client input. */
+  amountInPaise: number;
+  currency: string;
+  devSimulateOutcome?: VerifyOutcomeStatus;
+  /** Undo the purchase-specific PENDING row (e.g. cancel the pending membership) when no order could be created. */
+  onOrderFailure: () => Promise<void>;
+}
+
+export type OpenGatewayOrderResult = Omit<CheckoutResult, "membershipId">;
+
+/**
+ * Creates the PENDING payment + transaction for one purchase and asks the active gateway for an order. Shared by
+ * membership checkout and Personal Matchmaking checkout so both get the same rows, gateway reference and failure
+ * clean-up; verification is untouched (verifyPaymentInternal).
+ */
+export async function openGatewayOrder(input: OpenGatewayOrderInput): Promise<OpenGatewayOrderResult> {
+  const rows = await createPendingPaymentRows(input);
+  return requestGatewayOrder(input, rows);
+}
+
+export interface PendingPaymentRows {
+  payment: PaymentRow;
+  transactionRef: string;
+  txRow: Awaited<ReturnType<typeof paymentsRepo.createTransaction>>;
+}
+
+/** Step 1 of openGatewayOrder: the PENDING payment + transaction rows. Pass a transaction as `exec` to create them
+ * atomically with the caller's own checks (Personal Matchmaking locks its case row while doing this). */
+export async function createPendingPaymentRows(
+  input: Pick<OpenGatewayOrderInput, "userId" | "purpose" | "gatewayRow" | "amountInPaise" | "currency">,
+  exec: paymentsRepo.DbExecutor = db
+): Promise<PendingPaymentRows> {
+  const payment = await paymentsRepo.createPayment(
+    {
+      userId: input.userId,
+      ...input.purpose,
+      gatewayId: input.gatewayRow.id,
+      amountInPaise: input.amountInPaise,
+      currency: input.currency,
+    },
+    exec
+  );
   const transactionRef = paymentsRepo.generateInternalTransactionRef();
-  const txRow = await paymentsRepo.createTransaction({ paymentId: payment.id, transactionRef, amountInPaise: plan.priceInPaise });
+  const txRow = await paymentsRepo.createTransaction({ paymentId: payment.id, transactionRef, amountInPaise: input.amountInPaise }, exec);
+  return { payment, transactionRef, txRow };
+}
+
+/** Step 2 of openGatewayOrder: ask the gateway for an order for rows created by createPendingPaymentRows. */
+export async function requestGatewayOrder(input: OpenGatewayOrderInput, rows: PendingPaymentRows): Promise<OpenGatewayOrderResult> {
+  const { gatewayRow } = input;
+  const { payment, transactionRef, txRow } = rows;
 
   const devMode = isPaymentDevMode();
   const provider = getPaymentGatewayProvider(gatewayRow.name, devMode);
   let orderResult: Awaited<ReturnType<typeof provider.createOrder>>;
   try {
     orderResult = await provider.createOrder({
-      amountInSmallestUnit: plan.priceInPaise,
-      currency: plan.currency as "INR" | "USD",
+      amountInSmallestUnit: input.amountInPaise,
+      currency: input.currency as "INR" | "USD",
       receiptRef: transactionRef,
       simulateOutcome: input.devSimulateOutcome,
       paymentId: payment.id,
@@ -153,8 +214,9 @@ export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<
     // PCP production defect fix (additive error path): if the gateway cannot create an order (credentials missing,
     // gateway down, rejected request) nothing was ever offered to the customer, so the PENDING rows created above
     // must not linger — otherwise the duplicate-checkout guard would lock the member out of retrying for 15 minutes.
-    // The payment is closed through the same compare-and-swap used everywhere else, the membership is cancelled, and
-    // the ORIGINAL error (e.g. 503 "not configured") is rethrown unchanged. Cleanup problems never mask it.
+    // The payment is closed through the same compare-and-swap used everywhere else, the purchase-specific row is
+    // undone (onOrderFailure), and the ORIGINAL error (e.g. 503 "not configured") is rethrown unchanged. Cleanup
+    // problems never mask it.
     try {
       await paymentsRepo.resolveTransactionOutcome(txRow.id, {
         status: "FAILED",
@@ -162,7 +224,7 @@ export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<
         rawResponse: { reason: "order_creation_failed" },
       });
       await paymentsRepo.resolvePaymentOutcome(payment.id, { status: "FAILED", verifiedAt: null, verificationMethod: null });
-      await membershipsRepo.cancel(membership.id);
+      await input.onOrderFailure();
     } catch {
       /* best effort — the pending-expiry job reaps anything left behind */
     }
@@ -173,11 +235,10 @@ export async function checkout(ctx: AuthContext, input: CheckoutInput): Promise<
 
   return {
     paymentId: payment.id,
-    membershipId: membership.id,
     transactionRef,
     providerOrderId: orderResult.providerOrderId,
-    amountInPaise: plan.priceInPaise,
-    currency: plan.currency,
+    amountInPaise: input.amountInPaise,
+    currency: input.currency,
     gatewayName: gatewayRow.name,
     status: "PENDING",
     ...(orderResult.clientCheckout ? { gatewayCheckout: orderResult.clientCheckout } : {}),
@@ -257,6 +318,25 @@ async function activateMembershipFromPayment(payment: PaymentRow): Promise<void>
   });
 }
 
+/** What a payment pays for, in member-facing wording. */
+function purchaseLabel(payment: PaymentRow): string {
+  return payment.matchmakingCaseId ? "Personal Matchmaking" : "membership";
+}
+
+/**
+ * The single fulfilment step for a payment whose SUCCESS was just won by this caller (the compare-and-swap in
+ * resolveOrAlreadyResolved guarantees exactly one winner). Membership payments are fulfilled exactly as before.
+ * Personal Matchmaking fulfilment is idempotent and transactional (matchmaking-fulfilment.ts), so it can also be
+ * re-run safely to complete anything an earlier failed attempt left undone.
+ */
+async function fulfilVerifiedPayment(payment: PaymentRow): Promise<void> {
+  if (payment.matchmakingCaseId) {
+    await fulfilMatchmakingPayment(payment);
+    return;
+  }
+  await activateMembershipFromPayment(payment);
+}
+
 export interface VerifyResult {
   payment: PaymentRow;
   status: "SUCCESS" | "FAILED" | "PENDING" | "ALREADY_RESOLVED";
@@ -298,6 +378,9 @@ async function resolveOrAlreadyResolved(
 /** PCP: exported so webhook / reconciliation code re-uses the exact same race-safe verify path. */
 export async function verifyPaymentInternal(payment: PaymentRow): Promise<VerifyResult> {
   if (payment.status !== "PENDING") {
+    // A replay of an already-successful matchmaking payment completes any fulfilment step a failed earlier attempt
+    // left undone (idempotent: nothing is ever done twice). Membership replays are unchanged.
+    if (payment.status === "SUCCESS" && payment.matchmakingCaseId) await fulfilMatchmakingPayment(payment);
     return { payment, status: "ALREADY_RESOLVED" };
   }
   if (!payment.gatewayReference) {
@@ -334,7 +417,9 @@ export async function verifyPaymentInternal(payment: PaymentRow): Promise<Verify
       userId: payment.userId,
       channel: "IN_APP",
       title: "Payment failed",
-      body: "Your recent membership payment was not successful. You can try again from Membership plans.",
+      body: payment.matchmakingCaseId
+        ? "Your recent Personal Matchmaking payment was not successful. You can try again from the Personal Matchmaking page."
+        : "Your recent membership payment was not successful. You can try again from Membership plans.",
       dedupeKey: `payment_failed:${payment.id}`,
     });
     return { payment: updated, status: "FAILED" };
@@ -377,7 +462,7 @@ export async function verifyPaymentInternal(payment: PaymentRow): Promise<Verify
       userId: payment.userId,
       channel: "IN_APP",
       title: "Payment could not be verified",
-      body: "Your recent membership payment could not be verified and was not completed. Please try again or contact support.",
+      body: `Your recent ${purchaseLabel(payment)} payment could not be verified and was not completed. Please try again or contact support.`,
       dedupeKey: `payment_failed:${payment.id}`,
     });
     return { payment: updated, status: "FAILED" };
@@ -385,7 +470,7 @@ export async function verifyPaymentInternal(payment: PaymentRow): Promise<Verify
 
   const { payment: updated, won } = await resolveOrAlreadyResolved(payment.id, { status: "SUCCESS", verifiedAt: new Date(), verificationMethod: "AUTO" });
   if (!won) return { payment: updated, status: "ALREADY_RESOLVED" };
-  await activateMembershipFromPayment(updated);
+  await fulfilVerifiedPayment(updated);
   return { payment: updated, status: "SUCCESS" };
 }
 
@@ -473,6 +558,7 @@ export async function manualVerifyPayment(ctx: AuthContext, paymentId: string, i
   const payment = await paymentsRepo.findById(paymentId);
   if (!payment) throw new NotFoundError("Payment not found.");
   if (payment.status !== "PENDING") {
+    if (payment.status === "SUCCESS" && payment.matchmakingCaseId) await fulfilMatchmakingPayment(payment);
     return { payment, status: "ALREADY_RESOLVED" };
   }
 
@@ -487,7 +573,7 @@ export async function manualVerifyPayment(ctx: AuthContext, paymentId: string, i
 
   const { payment: updated, won } = await resolveOrAlreadyResolved(payment.id, { status: "SUCCESS", verifiedAt: new Date(), verificationMethod: "MANUAL" });
   if (!won) return { payment: updated, status: "ALREADY_RESOLVED" };
-  await activateMembershipFromPayment(updated);
+  await fulfilVerifiedPayment(updated);
 
   await record({
     actorType: "ADMIN",

@@ -36,7 +36,59 @@ import * as otpConfigRepo from "../src/server/modules/otp/otp-config.repository"
 import { NextRequest } from "next/server";
 import { POST as createProfileRoute, PATCH as updateProfileRoute } from "../src/app/api/v1/profiles/me/route";
 import { POST as uploadPhotoRoute } from "../src/app/api/v1/profiles/me/photos/route";
-import { resolveReferenceIds, tinyPngBuffer, makePhotoFormData } from "../tests/helpers/profile-fixtures";
+import sharp from "sharp";
+import { makePhotoFormData } from "../tests/helpers/profile-fixtures";
+import * as referenceRepo from "../src/server/modules/profiles/reference.repository";
+import { defaultAvatarSpec, drawAvatar } from "../src/lib/avatar/defaultAvatar";
+
+type DevReferenceIds = {
+  religionId: string;
+  motherTongueId: string;
+  educationId: string;
+  professionId: string;
+  maritalStatusId: string;
+  countryId: string;
+  cityId: string;
+  communityId: string;
+};
+
+/**
+ * Real, seeded reference values for the dev test members. Unlike the test-suite helper (tests/helpers/
+ * profile-fixtures.ts's resolveReferenceIds), this never creates a "Test Community" in the dev database — that
+ * placeholder would otherwise show up in every member's community dropdown.
+ */
+async function resolveDevReferenceIds(): Promise<DevReferenceIds> {
+  const [religions, motherTongues, educations, professions, maritalStatuses, countries] = await Promise.all([
+    referenceRepo.listReligions(),
+    referenceRepo.listMotherTongues(),
+    referenceRepo.listEducations(),
+    referenceRepo.listProfessions(),
+    referenceRepo.listMaritalStatuses(),
+    referenceRepo.listCountries(),
+  ]);
+  const religion = religions.find((r) => r.name === "Hindu") ?? religions[0];
+  const country = countries.find((c) => c.name === "India") ?? countries[0];
+  const city = await referenceRepo.findOrCreateCity("Mumbai", country.id);
+  const active = await referenceRepo.listCommunitiesForReligion(religion.id);
+  const community = active.find((c) => c.name === "Brahmin › North Indian Brahmin") ?? active.find((c) => !/test/i.test(c.name));
+  if (!community) throw new Error("No seeded community found for Hindu — run npm run db:seed first.");
+  return {
+    religionId: religion.id,
+    motherTongueId: (motherTongues.find((m) => m.name === "Hindi") ?? motherTongues[0]).id,
+    educationId: (educations.find((e) => e.name.startsWith("Bachelor's")) ?? educations[0]).id,
+    professionId: (professions.find((p) => p.name === "Software Engineer") ?? professions[0]).id,
+    maritalStatusId: (maritalStatuses.find((m) => m.name === "Never Married") ?? maritalStatuses[0]).id,
+    countryId: country.id,
+    cityId: city.id,
+    communityId: community.id,
+  };
+}
+
+/** A real, decodable portrait (the site's default-avatar drawing) — uploads are converted to WebP, so the photo
+ * must be a genuine image, not a synthetic placeholder. */
+async function devMemberPhoto(m: { email: string; gender: "MALE" | "FEMALE" }): Promise<Buffer> {
+  return sharp(Buffer.from(drawAvatar(defaultAvatarSpec({ gender: m.gender, religion: "Hindu", seed: m.email })))).png().toBuffer();
+}
 
 /** Documented, dev-only password shared by the fixed test members below. */
 const TEST_MEMBER_PASSWORD = "TestPass@12345";
@@ -283,7 +335,7 @@ function jreq(url: string, token: string, body?: unknown, method?: string) {
   });
 }
 
-async function setupMember(m: (typeof TEST_MEMBERS)[number], refs: Awaited<ReturnType<typeof resolveReferenceIds>>, planId: string): Promise<string> {
+async function setupMember(m: (typeof TEST_MEMBERS)[number], refs: DevReferenceIds, planId: string): Promise<string> {
   const passwordHash = await hashPassword(TEST_MEMBER_PASSWORD);
   let [u] = await db.select().from(users).where(eq(users.email, m.email)).limit(1);
   if (!u) {
@@ -333,7 +385,7 @@ async function setupMember(m: (typeof TEST_MEMBERS)[number], refs: Awaited<Retur
         new NextRequest("http://localhost/api/v1/profiles/me/photos", {
           method: "POST",
           headers: { authorization: `Bearer ${token}` },
-          body: makePhotoFormData(tinyPngBuffer(300, 300)),
+          body: makePhotoFormData(await devMemberPhoto(m)),
         })
       );
       if (up.status >= 300) throw new Error(`photo upload failed (${up.status}): ${(await up.text()).slice(0, 200)}`);
@@ -362,7 +414,7 @@ async function setup(noOtp: boolean): Promise<void> {
   const admin = await setupAdmin();
 
   log("\nTest members (complete, approved, with a photo, active membership)");
-  const refs = await resolveReferenceIds();
+  const refs = await resolveDevReferenceIds();
   const planId = await ensureTestPlan();
   for (const m of TEST_MEMBERS) {
     try {

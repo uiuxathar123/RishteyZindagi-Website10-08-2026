@@ -32,12 +32,21 @@ export interface InvoiceSnapshot {
     country: string | null;
     city: string | null;
   };
-  membership: {
+  /** Present on membership invoices (every invoice issued before Personal Matchmaking existed has it). */
+  membership?: {
     planName: string;
     planCode: string;
     durationDays: number;
     startedAt: string | null;
     expiresAt: string | null;
+  };
+  /** Present on service invoices (Personal Matchmaking), which include an access period instead of a plan. */
+  service?: {
+    name: string;
+    code: string;
+    includedAccessDays: number;
+    accessFrom: string | null;
+    accessUntil: string | null;
   };
   payment: {
     gatewayName: string;
@@ -111,14 +120,25 @@ export function renderInvoicePdf(snapshot: InvoiceSnapshot): Promise<Buffer> {
     if (location) doc.text(location);
     doc.moveDown(1);
 
-    // --- Membership ------------------------------------------------------
-    doc.fontSize(11).text("Membership", { underline: true });
-    doc.fontSize(10);
-    doc.text(`Plan: ${snapshot.membership.planName} (${snapshot.membership.planCode})`);
-    doc.text(`Duration: ${snapshot.membership.durationDays} days`);
-    if (snapshot.membership.startedAt) doc.text(`Start: ${snapshot.membership.startedAt}`);
-    if (snapshot.membership.expiresAt) doc.text(`Expiry: ${snapshot.membership.expiresAt}`);
-    doc.moveDown(1);
+    // --- Membership or service ------------------------------------------
+    if (snapshot.membership) {
+      doc.fontSize(11).text("Membership", { underline: true });
+      doc.fontSize(10);
+      doc.text(`Plan: ${snapshot.membership.planName} (${snapshot.membership.planCode})`);
+      doc.text(`Duration: ${snapshot.membership.durationDays} days`);
+      if (snapshot.membership.startedAt) doc.text(`Start: ${snapshot.membership.startedAt}`);
+      if (snapshot.membership.expiresAt) doc.text(`Expiry: ${snapshot.membership.expiresAt}`);
+      doc.moveDown(1);
+    }
+    if (snapshot.service) {
+      doc.fontSize(11).text("Service", { underline: true });
+      doc.fontSize(10);
+      doc.text(`Service: ${snapshot.service.name} (${snapshot.service.code})`);
+      doc.text(`Included member access: ${snapshot.service.includedAccessDays} days`);
+      if (snapshot.service.accessFrom) doc.text(`Access from: ${snapshot.service.accessFrom}`);
+      if (snapshot.service.accessUntil) doc.text(`Access until: ${snapshot.service.accessUntil}`);
+      doc.moveDown(1);
+    }
 
     // --- Payment -----------------------------------------------------
     doc.fontSize(11).text("Payment", { underline: true });

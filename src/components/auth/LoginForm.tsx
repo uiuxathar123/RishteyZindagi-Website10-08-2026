@@ -29,6 +29,8 @@ const EMAIL_RE = /^\S+@\S+\.\S+$/;
 export function LoginForm() {
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
+  // Only an explicit, valid destination is passed on to signup (not the /dashboard fallback).
+  const requestedNext = safeNext(params.get("next"), "");
   const expired = params.get("expired") === "1";
 
   const [mode, setMode] = useState<Mode>("password");
@@ -220,7 +222,7 @@ export function LoginForm() {
 
       <p className="mt-6 text-center text-sm text-rz-muted">
         New to RishteyZindagi?{" "}
-        <Link href="/signup" className="rz-focus font-semibold text-rz-maroon">
+        <Link href={requestedNext ? `/signup?next=${encodeURIComponent(requestedNext)}` : "/signup"} className="rz-focus font-semibold text-rz-maroon">
           Create a free profile
         </Link>
       </p>

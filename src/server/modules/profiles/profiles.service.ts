@@ -30,6 +30,7 @@ import { acceptedPartnerIds, isAcceptedPartner, viewerExtrasFor } from "./privac
 import { blockedUserIdsAmong, isBlockedEitherDirection } from "@/server/modules/interactions/interactions.repository";
 import { getStorageProvider } from "@/server/modules/storage/factory";
 import { inspectImage } from "@/server/modules/storage/image-inspect";
+import { convertPhotoToWebp } from "@/server/modules/storage/photo-convert";
 import * as profilesRepo from "./profiles.repository";
 import type { ProfileRow, ProfilePhotoRow, ProfileUpdate } from "./profiles.repository";
 import { getApprovalSettings } from "@/server/modules/platform-settings/platform-settings.service";
@@ -404,38 +405,43 @@ export async function uploadMyPhoto(ctx: AuthContext, input: UploadPhotoInput): 
   if (!detected) {
     throw new ValidationError("Unsupported or invalid image file. Only JPEG, PNG, and WEBP are accepted.");
   }
-  if (
-    detected.width !== null &&
-    detected.height !== null &&
-    (detected.width < MIN_PHOTO_DIMENSION || detected.height < MIN_PHOTO_DIMENSION)
-  ) {
+  // Decodes the real pixels (rejecting corrupt files and oversized bitmaps) and re-encodes them as WebP.
+  // Only the converted image is ever stored or served; nothing is written if conversion fails.
+  const converted = await convertPhotoToWebp(input.buffer);
+  if (converted.sourceWidth < MIN_PHOTO_DIMENSION || converted.sourceHeight < MIN_PHOTO_DIMENSION) {
     throw new ValidationError(`Image must be at least ${MIN_PHOTO_DIMENSION}x${MIN_PHOTO_DIMENSION} pixels.`);
   }
 
   const photoId = randomUUID();
-  const extension = CONTENT_TYPE_EXTENSION[detected.contentType] ?? "bin";
+  const extension = CONTENT_TYPE_EXTENSION[converted.contentType] ?? "bin";
   const storageKey = `photos/${profile.id}/${photoId}.${extension}`;
 
   const storage = getStorageProvider();
-  await storage.upload({ key: storageKey, buffer: input.buffer, contentType: detected.contentType });
+  await storage.upload({ key: storageKey, buffer: converted.buffer, contentType: converted.contentType });
 
   const isPrimary = existingCount === 0;
-  const nextSortOrder = (await profilesRepo.maxSortOrder(profile.id)) + 1;
-
-  const photo = await profilesRepo.createPhoto({
-    id: photoId,
-    profileId: profile.id,
-    url: `/api/v1/profiles/photos/${photoId}/file`,
-    storageKey,
-    originalFilename: input.declaredFilename,
-    mimeType: detected.contentType,
-    fileSizeBytes: input.buffer.length,
-    width: detected.width,
-    height: detected.height,
-    uploadStatus: "COMPLETE",
-    isPrimary,
-    sortOrder: nextSortOrder,
-  });
+  let photo: ProfilePhotoRow;
+  try {
+    const nextSortOrder = (await profilesRepo.maxSortOrder(profile.id)) + 1;
+    photo = await profilesRepo.createPhoto({
+      id: photoId,
+      profileId: profile.id,
+      url: `/api/v1/profiles/photos/${photoId}/file`,
+      storageKey,
+      originalFilename: input.declaredFilename,
+      mimeType: converted.contentType,
+      fileSizeBytes: converted.buffer.length,
+      width: converted.width,
+      height: converted.height,
+      uploadStatus: "COMPLETE",
+      isPrimary,
+      sortOrder: nextSortOrder,
+    });
+  } catch (err) {
+    // No row points at the stored file, so remove it rather than leave an orphan.
+    await storage.delete(storageKey).catch(() => undefined);
+    throw err;
+  }
 
   await recomputeProfileState(profile.id);
 

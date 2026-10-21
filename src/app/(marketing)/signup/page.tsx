@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Container } from "@/components/ui/Container";
 import { SignupFlow } from "@/components/auth/SignupFlow";
+import { Skeleton } from "@/components/ui/States";
 
 export const metadata: Metadata = {
   title: "Create Your Free Profile",
@@ -17,7 +19,10 @@ export default function SignupPage() {
           Verify your contact, set a password, and start your profile — it only takes a few minutes.
         </p>
       </div>
-      <SignupFlow />
+      {/* SignupFlow reads ?next= on the client so this page stays static. */}
+      <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
+        <SignupFlow />
+      </Suspense>
     </Container>
   );
 }

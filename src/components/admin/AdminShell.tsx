@@ -22,6 +22,7 @@ import {
   ScrollText,
   UserX,
   BadgePercent,
+  HeartHandshake,
   Network,
   ShieldAlert,
   ShieldCheck,
@@ -67,6 +68,8 @@ const SUPER_ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/super/staff", label: "Staff & Roles", icon: UserCog },
   { href: "/admin/super/settings", label: "Platform Settings", icon: SlidersHorizontal, needs: ["platform.settings.manage"] },
   { href: "/admin/super/membership-plans", label: "Membership Plans", icon: BadgePercent, needs: ["plans.manage"] },
+  // Super Admin only by role: no permission can unlock it, and it is not in DELEGABLE_HREFS.
+  { href: "/admin/super/matchmaking", label: "Personal Matchmaking", icon: HeartHandshake },
   { href: "/admin/super/communities", label: "Communities", icon: Network, needs: ["communities.manage"] },
   { href: "/admin/super/revenue", label: "Revenue", icon: IndianRupee, needs: ["payments.review"] },
   { href: "/admin/super/audit-log", label: "Audit Log", icon: ScrollText, needs: ["audit.view"] },

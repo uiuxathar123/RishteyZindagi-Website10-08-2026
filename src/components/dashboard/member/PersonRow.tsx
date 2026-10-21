@@ -4,10 +4,10 @@ import { MapPin } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { memberHref } from "@/components/profile/ProfileCard";
-import { locationLine } from "@/components/profile/cardModel";
+import { cardAvatar, locationLine } from "@/components/profile/cardModel";
 import type { Summary } from "@/components/profile/useProfileSummaries";
 import { Avatar } from "@/components/ui/Avatar";
-import { VerifiedBadge } from "@/components/ui/Badge";
+import { CompanyVerifiedBadge, VerifiedBadge } from "@/components/ui/Badge";
 import type { CounterpartRef } from "@/lib/api/types";
 
 /**
@@ -33,7 +33,7 @@ export function PersonRow({
 
   const identity = (
     <>
-      <Avatar src={card?.photoSrc} alt={card?.photoSrc ? `Photo of ${name}` : name} size="lg" />
+      <Avatar src={card?.photoSrc} alt={card?.photoSrc ? `Photo of ${name}` : name} size="lg" fallbackSrc={card ? cardAvatar(card) : undefined} />
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="block truncate font-serif text-base font-semibold text-rz-navy">
@@ -41,6 +41,7 @@ export function PersonRow({
             {card ? `, ${card.age}` : ""}
           </span>
           {card?.verified && <VerifiedBadge />}
+          {card?.companyVerified && <CompanyVerifiedBadge />}
         </span>
         {place && (
           <span className="mt-0.5 flex items-center gap-1 text-xs text-rz-muted">

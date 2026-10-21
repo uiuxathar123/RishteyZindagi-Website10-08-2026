@@ -57,16 +57,49 @@ const FOOTER = {
   legalText: "This is a system-generated invoice. Placeholder legal/company details — see BACKEND.md's B8 section.",
 };
 
-export interface IssueInvoiceParams {
+/** A service purchase (Personal Matchmaking): what is snapshotted onto its invoice instead of a membership plan. */
+export interface InvoiceServiceItem {
+  name: string;
+  code: string;
+  includedAccessDays: number;
+  accessFrom: Date | null;
+  accessUntil: Date | null;
+}
+
+/** Exactly one of a membership (+ its plan) or a service item is invoiced. */
+export type IssueInvoiceParams = {
   userId: string;
   payment: PaymentRow;
   transaction: TransactionRow;
-  membership: MembershipRow;
-  plan: MembershipPlanRow;
+} & ({ membership: MembershipRow; plan: MembershipPlanRow; service?: undefined } | { service: InvoiceServiceItem; membership?: undefined; plan?: undefined });
+
+function itemSnapshot(params: IssueInvoiceParams): Pick<InvoiceSnapshot, "membership" | "service"> {
+  if (params.service) {
+    const { service } = params;
+    return {
+      service: {
+        name: service.name,
+        code: service.code,
+        includedAccessDays: service.includedAccessDays,
+        accessFrom: service.accessFrom ? service.accessFrom.toISOString() : null,
+        accessUntil: service.accessUntil ? service.accessUntil.toISOString() : null,
+      },
+    };
+  }
+  const { membership, plan } = params;
+  return {
+    membership: {
+      planName: plan.name,
+      planCode: plan.code,
+      durationDays: plan.durationDays,
+      startedAt: membership.startedAt ? membership.startedAt.toISOString() : null,
+      expiresAt: membership.expiresAt ? membership.expiresAt.toISOString() : null,
+    },
+  };
 }
 
 async function buildSnapshot(params: IssueInvoiceParams): Promise<InvoiceSnapshot> {
-  const { userId, payment, transaction, membership, plan } = params;
+  const { userId, payment, transaction } = params;
 
   const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   const [gatewayRow] = await db.select().from(paymentGateways).where(eq(paymentGateways.id, payment.gatewayId)).limit(1);
@@ -106,13 +139,7 @@ async function buildSnapshot(params: IssueInvoiceParams): Promise<InvoiceSnapsho
       country: countryName,
       city: cityName,
     },
-    membership: {
-      planName: plan.name,
-      planCode: plan.code,
-      durationDays: plan.durationDays,
-      startedAt: membership.startedAt ? membership.startedAt.toISOString() : null,
-      expiresAt: membership.expiresAt ? membership.expiresAt.toISOString() : null,
-    },
+    ...itemSnapshot(params),
     payment: {
       gatewayName: gatewayRow?.name ?? "Unknown gateway",
       internalTransactionRef: transaction.transactionRef,

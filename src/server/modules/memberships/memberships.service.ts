@@ -19,6 +19,7 @@
  * to have built.
  */
 import { hasAdvancedSearchEntitlement } from "./membership-gate";
+import { latestIncludedAccessUntil } from "@/server/modules/matchmaking/matchmaking.repository";
 import { getSearchSettings } from "@/server/modules/platform-settings/platform-settings.service";
 import { AuthorizationError, NotFoundError } from "@/server/lib/errors";
 import type { AuthContext } from "@/server/middleware/authenticate";
@@ -42,6 +43,12 @@ export interface MyMembershipView {
   isActive: boolean;
   /** B18: what the member's current plan unlocks — the UI uses it to show locked filters; the server enforces independently. */
   entitlements: { advancedSearch: boolean };
+  /**
+   * Member access (interests and chat) included with a Personal Matchmaking purchase or complimentary offer, when
+   * running — not a membership plan, so it never changes `isActive`; the UI shows it so a member with this access is
+   * not told they need a membership. The gate (membership-gate.ts) already honours it.
+   */
+  includedAccess: { until: string } | null;
 }
 
 async function advancedSearchAllowed(userId: string): Promise<boolean> {
@@ -52,15 +59,19 @@ async function advancedSearchAllowed(userId: string): Promise<boolean> {
 export async function getMyMembership(ctx: AuthContext): Promise<MyMembershipView> {
   const userId = requireMemberSubject(ctx);
   const raw = await repo.findMostRecentForUser(userId);
-  const entitlements = { advancedSearch: await advancedSearchAllowed(userId) };
-  if (!raw) return { membership: null, planCode: null, planName: null, isActive: false, entitlements };
+  const [entitlements, includedUntil] = await Promise.all([
+    advancedSearchAllowed(userId).then((advancedSearch) => ({ advancedSearch })),
+    latestIncludedAccessUntil(userId),
+  ]);
+  const includedAccess = includedUntil ? { until: includedUntil.toISOString() } : null;
+  if (!raw) return { membership: null, planCode: null, planName: null, isActive: false, entitlements, includedAccess };
   // Opportunistic display-freshness — see memberships.repository.ts's
   // markExpiredIfPast doc comment: never relied upon for correctness,
   // only for not showing a stale "ACTIVE" label after expiry has passed.
   const membership = await repo.markExpiredIfPast(raw);
   const plan = await plansRepo.findById(membership.planId);
   const isActive = membership.status === "ACTIVE" && (!membership.expiresAt || membership.expiresAt.getTime() > Date.now());
-  return { membership, planCode: plan?.code ?? null, planName: plan?.name ?? null, isActive, entitlements };
+  return { membership, planCode: plan?.code ?? null, planName: plan?.name ?? null, isActive, entitlements, includedAccess };
 }
 
 export async function listMyMembershipHistory(ctx: AuthContext): Promise<MembershipRow[]> {

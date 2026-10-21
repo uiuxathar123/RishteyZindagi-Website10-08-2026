@@ -35,6 +35,7 @@
 import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { memberships, membershipPlans } from "@/server/db/schema";
+import { hasIncludedAccess } from "@/server/modules/matchmaking/matchmaking.repository";
 
 /**
  * True only when this user has a `memberships` row with `status =
@@ -55,7 +56,10 @@ export async function hasActiveMembership(userId: string): Promise<boolean> {
       )
     )
     .limit(1);
-  return !!row;
+  if (row) return true;
+  // Personal Matchmaking: a verified, unrefunded purchase includes member access (interests and chat) for the
+  // configured number of days. Only access is granted here: no membership row, plan features, renewal or boost.
+  return hasIncludedAccess(userId, now);
 }
 
 /**

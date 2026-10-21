@@ -18,6 +18,7 @@
  *    keeps).
  */
 import { randomUUID } from "crypto";
+import { applyMatchmakingFullRefund } from "@/server/modules/matchmaking/matchmaking-fulfilment";
 import { ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "@/server/lib/errors";
 import { db } from "@/server/db/client";
 import { paymentRefunds } from "@/server/db/schema";
@@ -197,6 +198,7 @@ async function applyRefundOutcome(refund: RefundRow): Promise<void> {
         const membership = await membershipsRepo.findById(payment.membershipId);
         if (membership && membership.status === "ACTIVE") await membershipsRepo.cancel(membership.id);
       }
+      if (payment.matchmakingCaseId) await applyMatchmakingFullRefund(payment);
       const invoice = await pcpRepo.invoiceForPayment(payment.id);
       if (invoice && invoice.status !== "VOID") await invoicesRepo.voidInvoice(invoice.id, "Payment fully refunded.");
       await record({ actorType: "SYSTEM", action: "payment.fully_refunded", entityType: "payment", entityId: payment.id });

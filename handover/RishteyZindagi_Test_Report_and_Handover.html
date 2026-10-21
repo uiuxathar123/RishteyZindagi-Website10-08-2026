@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="hi-Latn">
+<head>
+<meta charset="utf-8">
+<title>RishteyZindagi — Test Report &amp; Developer Handover</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --maroon:#A51E3B; --navy:#1C2D4F; --gold:#C99A45; --cream:#FFF9EF; --champ:#F4E5C4; --muted:#5d6475; --line:#e3dccd; --ok:#1e7a4f; --warn:#9a6b00; --bad:#a51e3b; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color:#222; font-size:10.6pt; line-height:1.5; margin:0; }
+  h1 { font-family: Georgia, serif; color:var(--navy); font-size:22pt; margin:0 0 6pt; }
+  h2 { font-family: Georgia, serif; color:var(--maroon); font-size:15pt; margin:18pt 0 6pt; padding-bottom:3pt; border-bottom:2px solid var(--champ); }
+  h3 { color:var(--navy); font-size:11.5pt; margin:12pt 0 4pt; }
+  p { margin:4pt 0 6pt; }
+  .part { page-break-before: always; }
+  .part-title { background:var(--navy); color:#fff; padding:10pt 14pt; border-radius:6pt; font-family:Georgia,serif; font-size:17pt; margin:0 0 10pt; }
+  .part-title small { display:block; font-family:"Segoe UI",Arial; font-size:10pt; opacity:.85; }
+  table { width:100%; border-collapse:collapse; margin:6pt 0 10pt; font-size:9.8pt; page-break-inside:avoid; }
+  th { background:var(--champ); color:var(--navy); text-align:left; padding:5pt 6pt; border:1px solid var(--line); }
+  td { padding:4.5pt 6pt; border:1px solid var(--line); vertical-align:top; }
+  code, .mono { font-family: Consolas, "Courier New", monospace; font-size:9.3pt; background:#f4f1ea; padding:0 3pt; border-radius:3pt; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size:9pt; background:#1f2533; color:#f1f1f1; padding:8pt 10pt; border-radius:5pt; white-space:pre-wrap; margin:5pt 0 9pt; page-break-inside:avoid; }
+  pre .c { color:#9fb3c8; }
+  .box { border-radius:6pt; padding:8pt 11pt; margin:8pt 0; page-break-inside:avoid; }
+  .warn { background:#fff4dc; border-left:5px solid var(--gold); }
+  .danger { background:#fdecef; border-left:5px solid var(--maroon); }
+  .good { background:#e8f5ee; border-left:5px solid var(--ok); }
+  .info { background:#eef2f8; border-left:5px solid var(--navy); }
+  .pill { display:inline-block; padding:0 7pt; border-radius:9pt; font-size:8.8pt; font-weight:600; }
+  .p-ok { background:#e1f2e8; color:var(--ok); } .p-warn { background:#fdf0d2; color:var(--warn); } .p-bad { background:#fbe3e8; color:var(--bad); }
+  ol.steps { padding-left:18pt; } ol.steps > li { margin:0 0 7pt; }
+  .cover { height:250mm; display:flex; flex-direction:column; justify-content:center; background:linear-gradient(160deg,var(--cream),var(--champ)); border-radius:10pt; padding:28mm 20mm; border-top:10pt solid var(--maroon); border-bottom:10pt solid var(--gold); }
+  .cover h1 { font-size:30pt; } .cover .brand span { color:var(--maroon); }
+  .cover .sub { font-size:14pt; color:var(--navy); margin:4pt 0 18pt; }
+  .cover table td { border:none; padding:2pt 8pt 2pt 0; font-size:10.5pt; }
+  .toc li { margin:2pt 0; }
+  .fig { text-align:center; margin:8pt 0 4pt; page-break-inside:avoid; }
+  .fig svg { max-width:100%; height:auto; }
+  .caption { text-align:center; font-size:9pt; color:var(--muted); margin-bottom:10pt; }
+  .two { display:flex; gap:10pt; } .two > div { flex:1; }
+  .small { font-size:9pt; color:var(--muted); }
+  .nobreak { page-break-inside:avoid; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER -->
+<section class="cover">
+  <div class="brand"><h1>Rishtey<span>Zindagi</span>.com</h1></div>
+  <div class="sub">Website Test Report &amp; Developer Handover Guide<br><span style="font-size:11pt;color:#5d6475">Local setup · OTP · Deployment · Project workflow (flow charts)</span></div>
+  <table>
+    <tr><td><b>Date</b></td><td>22 October 2026</td></tr>
+    <tr><td><b>Project</b></td><td>Next.js 14 (App Router) + TypeScript + PostgreSQL + Drizzle ORM</td></tr>
+    <tr><td><b>Repository</b></td><td><span class="mono">github.com/uiuxathar123/RishteyZindagi-Website10-08-2026</span> (private)</td></tr>
+    <tr><td><b>Code base</b></td><td>Last commit <span class="mono">b25c858</span> + uncommitted work (see section 7 — must be committed first)</td></tr>
+    <tr><td><b>Tested on</b></td><td>Windows 11, Node v24, PostgreSQL 18 (local), Microsoft Edge</td></tr>
+  </table>
+  <div class="box info" style="margin-top:18pt">
+    <b>Yeh document kis liye hai?</b> Part A batata hai ki website kitni tez hai aur kya-kya test hua. Part B ek naye developer ko
+    bina kisi madad ke project ko apne computer par chalane aur server par deploy karne ke steps deta hai. Part C mein poore project ke flow charts hain.
+  </div>
+  <ol class="toc small" style="margin-top:12pt">
+    <li>Part A — Test Report (sections 1–6)</li>
+    <li>Part B — Developer Handover (sections 7–15)</li>
+    <li>Part C — Project Flow Charts (sections 16–20)</li>
+  </ol>
+</section>
+
+<!-- ============================================================ PART A -->
+<section class="part">
+<div class="part-title">Part A — Website Test Report<small>Practical testing: speed, page-to-page navigation, a real account, photos and WebP</small></div>
+
+<h2>1. Short summary</h2>
+<table>
+  <tr><th style="width:34%">Area</th><th style="width:16%">Result</th><th>Notes</th></tr>
+  <tr><td>Speed for real users (production build)</td><td><span class="pill p-ok">Very good</span></td><td>Median page ~29 ms, slowest ~89 ms, every page ≤ 126 kB JavaScript</td></tr>
+  <tr><td>Speed on local dev (<span class="mono">npm run dev</span>)</td><td><span class="pill p-warn">Normal for dev</span></td><td>First open of a page 1–8 s (compiling), after that 26–443 ms</td></tr>
+  <tr><td>Signup → profile → photo → approval → search</td><td><span class="pill p-ok">Working</span></td><td>Tested with a new account end to end</td></tr>
+  <tr><td>Member features (search, recommendations, shortlist, interests, chat, notifications)</td><td><span class="pill p-ok">Working</span></td><td>Interest correctly needs an active membership</td></tr>
+  <tr><td>Photos in WebP</td><td><span class="pill p-ok">Done</span></td><td>All 116 member photos WebP; new uploads auto-convert; site images served as WebP</td></tr>
+  <tr><td>Super Admin: Personal Matchmaking, Members, Introductions, Company Verified, Users panel</td><td><span class="pill p-ok">Working</span></td><td>Read-only and real-flow checks done</td></tr>
+  <tr><td>Automated tests (focused sets)</td><td><span class="pill p-ok">Pass</span></td><td>151 matchmaking/payments/security tests + 39 membership/search/avatar tests</td></tr>
+  <tr><td>Real vendors (SMS/e-mail OTP, Razorpay live, S3)</td><td><span class="pill p-warn">Not tested</span></td><td>Need real credentials — only local mocks/dev modes were used</td></tr>
+</table>
+
+<h2>2. Speed — numbers</h2>
+<h3>2.1 Production build (what real users get)</h3>
+<table>
+  <tr><th>Measure</th><th>Result</th></tr>
+  <tr><td>Page response, median (warm)</td><td><b>29 ms</b></td></tr>
+  <tr><td>Page response, median (first visit)</td><td>32 ms</td></tr>
+  <tr><td>Slowest public page</td><td>89 ms (Success Stories)</td></tr>
+  <tr><td>APIs (search, offer, plans)</td><td>30–70 ms</td></tr>
+  <tr><td>Biggest page JavaScript (first load)</td><td>126 kB (My Profile); public pages ~96–101 kB</td></tr>
+  <tr><td>Server start</td><td>0.5 s</td></tr>
+</table>
+<h3>2.2 Page-to-page navigation in the browser (local dev, real clicks)</h3>
+<table>
+  <tr><th>Pages</th><th>First time (dev compiles the page)</th><th>Every time after</th></tr>
+  <tr><td>Dashboard: Profile, Matches, Interests, Shortlist, Messages, Groups, Notifications, Membership, Personal Matchmaking, Settings, Overview</td><td>1–8 s</td><td>URL change <b>26–80 ms</b>, content ready <b>157–443 ms</b></td></tr>
+  <tr><td>Public: How it works, Search, Membership, Success stories, Safety, About, Blog, Home</td><td>0.7–2.5 s</td><td><b>26–218 ms</b></td></tr>
+  <tr><td>Member APIs (recommendations, search, member profile, chats, notifications, shortlist, membership)</td><td>up to ~1 s</td><td><b>110–200 ms</b></td></tr>
+</table>
+<div class="box info"><b>Kyun pehli baar dheema?</b> <span class="mono">npm run dev</span> har page ko pehli baar khulne par compile karta hai (1,000–1,400 modules). Yeh sirf developer machine par hota hai. Production build (<span class="mono">npm run build</span> + <span class="mono">npm start</span>) mein pages pehle se compiled hote hain.</div>
+<div class="box warn"><b>Turbopack try kiya:</b> <span class="mono">npm run dev -- --turbo</span> se pehli baar ka compile ~2.6x tez hua, lekin har API call par ~2 s extra lagta tha. Isliye normal <span class="mono">npm run dev</span> hi recommended hai.</div>
+
+<h2>3. Full-site test with a new account</h2>
+<table>
+  <tr><th style="width:40%">Step</th><th style="width:14%">Result</th><th>Detail</th></tr>
+  <tr><td>Signup at <span class="mono">/signup</span> (Groom, Hindu)</td><td><span class="pill p-ok">OK</span></td><td>Account created and signed in. OTP step skipped because local OTP policy is OFF (see section 10).</td></tr>
+  <tr><td>Profile filled through the website forms</td><td><span class="pill p-ok">OK</span></td><td>25% → 75% → 100%</td></tr>
+  <tr><td>Photo upload (JPEG 128 kB from the browser)</td><td><span class="pill p-ok">OK</span></td><td>Stored and served as <b>WebP 47 kB</b> (900×1200), became main photo</td></tr>
+  <tr><td>Partner preferences</td><td><span class="pill p-ok">OK</span></td><td>Profile became "Ready for visibility", approval PENDING (manual approval is on)</td></tr>
+  <tr><td>Super Admin → Visibility Queue → Approve</td><td><span class="pill p-ok">OK</span></td><td>Profile then appeared in public search (men: 54 → 55)</td></tr>
+  <tr><td>Recommendations / Search</td><td><span class="pill p-ok">OK</span></td><td>12 recommendations, 20 search results</td></tr>
+  <tr><td>Open a member profile, shortlist add / list / remove</td><td><span class="pill p-ok">OK</span></td><td></td></tr>
+  <tr><td>Send interest without a membership</td><td><span class="pill p-ok">Correctly blocked</span></td><td>"An active membership is required to send new interests."</td></tr>
+  <tr><td>Chats, notifications, membership, Personal Matchmaking pages</td><td><span class="pill p-ok">OK</span></td><td>No error screen, no console errors (except the expected 403 above)</td></tr>
+</table>
+
+<h2>4. Images and WebP</h2>
+<ul>
+  <li><b>New uploads:</b> every member photo is converted on the server to WebP (max side 2048 px, quality 82, phone rotation fixed). Only the WebP is stored.</li>
+  <li><b>Old photos:</b> 10 old JPEG/PNG photos converted with <span class="mono">scripts/convert-photos-to-webp.ts</span> (saved ~4.2 MB; originals kept). 4 broken placeholder PNGs from the old dev-tools were replaced with avatars. Now <b>116 / 116 photos are WebP</b>.</li>
+  <li><b>Website images</b> (hero, blog, stories): served through <span class="mono">next/image</span>, which sends WebP to browsers that support it (65 kB JPEG → 21 kB WebP) and JPEG to old browsers.</li>
+  <li><b>Link preview image</b> <span class="mono">public/og-image.jpg</span> (1200×630) was missing — now created. Kept as JPEG because some chat apps do not show WebP previews.</li>
+  <li><b>No photo?</b> A default illustrated avatar (by gender + religion) is shown. It is <i>not</i> a photo: a real photo is still required to appear in search.</li>
+</ul>
+
+<h2>5. Fixed during this testing</h2>
+<table>
+  <tr><th style="width:36%">Problem found</th><th>Fix</th></tr>
+  <tr><td><span class="mono">sitemap.xml</span> and <span class="mono">robots.txt</span> missing (404)</td><td>Added <span class="mono">src/app/sitemap.ts</span> and <span class="mono">src/app/robots.ts</span> (public pages + blog; admin, dashboard, API, checkout hidden from search engines)</td></tr>
+  <tr><td>No public link to Personal Matchmaking</td><td>Added to the footer "Matrimonial" column</td></tr>
+  <tr><td>Dashboard said "No active membership" to members who have matchmaking access</td><td>Membership widget now shows "Member access — Active, included with Personal Matchmaking until …"</td></tr>
+  <tr><td>"Test Community" visible in the community dropdown</td><td>Came from dev-tools using a test helper. Deactivated, profiles moved to a real community, dev-tools fixed</td></tr>
+  <tr><td><span class="mono">npm run dev:setup</span> would fail on photo upload (fake PNG)</td><td>dev-tools now uploads a real avatar image</td></tr>
+  <tr><td>Old photos not WebP; OG image missing</td><td>See section 4</td></tr>
+  <tr><td>Two or three <span class="mono">next dev</span> servers running in the same folder → "ChunkLoadError"</td><td>Only one dev server per project folder (see troubleshooting)</td></tr>
+</table>
+
+<h2>6. Still open / to decide</h2>
+<ul>
+  <li><b>98 changed files are not committed to git yet</b> — must be done before handover (section 7).</li>
+  <li>Real SMS / e-mail OTP, Razorpay/PhonePe live payments, S3 storage and backups need real accounts and a staging test.</li>
+  <li>Load test on a real server (hundreds of users at once) not done yet.</li>
+  <li>Older docs <span class="mono">LOCAL_SETUP.md</span> / <span class="mono">GIT_HANDOVER.md</span> show some old numbers (19 migrations). This PDF has the current ones (22 migrations, 71 tables).</li>
+  <li>Header navigation has no "Personal Matchmaking" link (footer has one) — design decision.</li>
+</ul>
+</section>
+
+<!-- ============================================================ PART B -->
+<section class="part">
+<div class="part-title">Part B — Developer Handover<small>Clone from git, run locally, understand OTP, deploy to a server — step by step</small></div>
+
+<h2>7. FIRST: owner must commit and push the latest work</h2>
+<div class="box danger">
+  <b>Zaroori:</b> Abhi project folder mein <b>98 files commit nahi hui hain</b> (Personal Matchmaking, Introductions, Invitations, Company Verified, WebP conversion, avatars,
+  migrations <span class="mono">0019–0021</span>, sitemap, tests…). Naya developer agar git se lega to yeh sab <b>usko nahi milega</b>. Isliye pehle owner yeh kare:
+</div>
+<pre><span class="c"># project folder mein (owner ki machine par)</span>
+npm run hooks:install              <span class="c"># secret-scanner pre-commit hook (once)</span>
+git status --short                 <span class="c"># .env, .storage-local, node_modules dikhne NAHI chahiye</span>
+npm run scan:secrets               <span class="c"># koi password/key file mein to nahi</span>
+git add -A
+git commit -m "Personal Matchmaking, introductions, invitations, WebP, avatars, sitemap"
+git push origin main</pre>
+<p class="small">Git mein kabhi nahi jaata: <span class="mono">.env</span>, <span class="mono">.env.test</span>, <span class="mono">.storage-local/</span> (uploaded photos), <span class="mono">node_modules/</span>, <span class="mono">.next/</span>, database. Naya developer apni <span class="mono">.env</span> khud banayega aur apna database khud seed karega.</p>
+
+<h2>8. Software needed</h2>
+<table>
+  <tr><th>Software</th><th>Version</th><th>Notes</th></tr>
+  <tr><td>Node.js</td><td>20 LTS or 22 (also works on 24)</td><td><span class="mono">node -v</span></td></tr>
+  <tr><td>npm</td><td>10+</td><td>Use npm (not yarn/pnpm) — <span class="mono">package-lock.json</span></td></tr>
+  <tr><td>PostgreSQL</td><td>16 or newer</td><td>Note the <span class="mono">postgres</span> user's password; <span class="mono">psql</span> on PATH</td></tr>
+  <tr><td>Git</td><td>any</td><td>Access to the private GitHub repo</td></tr>
+  <tr><td>Git Bash (Windows)</td><td>optional</td><td>Only for <span class="mono">scripts/*.sh</span> (backup/deploy)</td></tr>
+</table>
+
+<h2>9. Run the project locally — step by step</h2>
+<ol class="steps">
+  <li><b>Code lo</b>
+<pre>git clone https://github.com/uiuxathar123/RishteyZindagi-Website10-08-2026.git rishteyzindagi
+cd rishteyzindagi
+npm ci</pre></li>
+  <li><b>Do databases banao</b> (dev aur test alag — tests tables khaali kar dete hain)
+<pre>psql -U postgres -c "CREATE DATABASE rishteyzindagi_dev;"
+psql -U postgres -c "CREATE DATABASE rishteyzindagi_test;"</pre></li>
+  <li><b>Environment files banao</b>
+<pre>copy .env.example .env               <span class="c"># macOS/Linux: cp .env.example .env</span>
+copy .env.test.example .env.test</pre>
+    <span class="mono">.env</span> mein kam se kam yeh bharo (baaki khaali chhod sakte ho):
+    <table>
+      <tr><th>Variable</th><th>Value</th></tr>
+      <tr><td><span class="mono">DATABASE_URL</span></td><td><span class="mono">postgresql://postgres:&lt;password&gt;@localhost:5432/rishteyzindagi_dev</span></td></tr>
+      <tr><td><span class="mono">AUTH_SECRET</span></td><td>long random string — <span class="mono">node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"</span></td></tr>
+      <tr><td><span class="mono">NODE_ENV</span></td><td><span class="mono">development</span></td></tr>
+      <tr><td><span class="mono">PAYMENT_CREDENTIALS_ENCRYPTION_KEY</span></td><td>64 hex chars — <span class="mono">node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</span></td></tr>
+      <tr><td><span class="mono">SEED_DEV_SUPER_ADMIN</span>, <span class="mono">…_EMAIL</span>, <span class="mono">…_PASSWORD</span></td><td><span class="mono">true</span>, your e-mail, a strong password (local Super Admin)</td></tr>
+    </table>
+    <span class="mono">.env.test</span>: same, but <span class="mono">DATABASE_URL</span> → <span class="mono">rishteyzindagi_test</span> and <span class="mono">NODE_ENV=test</span>.
+  </li>
+  <li><b>Tables banao (22 migrations) aur reference data daalo</b>
+<pre>npm run db:migrate
+npm run db:seed</pre>
+    Test database ke liye bhi (PowerShell):
+<pre>$env:DATABASE_URL="postgresql://postgres:&lt;password&gt;@localhost:5432/rishteyzindagi_test"; npm run db:migrate; npm run db:seed; Remove-Item Env:DATABASE_URL</pre></li>
+  <li><b>Local helper chalao</b> — Super Admin + 4 test members (complete profile, photo, membership) + OTP off:
+<pre>npm run dev:setup -- --no-otp
+npm run dev:doctor                 <span class="c"># read-only health report</span></pre></li>
+  <li><i>(Optional)</i> <b>100 realistic sample profiles</b> (search ko bhara hua dikhane ke liye):
+<pre>npx tsx scripts/seed-sample-profiles.ts --target=dev
+<span class="c"># hatane ke liye:  npx tsx scripts/seed-sample-profiles.ts --target=dev --remove</span></pre></li>
+  <li><b>Website chalao</b>
+<pre>npm run dev                        <span class="c"># http://localhost:3000</span></pre>
+    <table>
+      <tr><th>Open</th><th>Login</th></tr>
+      <tr><td>Website <span class="mono">/</span> · Member area <span class="mono">/dashboard</span></td><td>Test members (dev-only): <span class="mono">test.priya@example.com</span>, <span class="mono">test.rahul@example.com</span> … password <span class="mono">TestPass@12345</span></td></tr>
+      <tr><td>Admin panel <span class="mono">/admin/login</span></td><td>The e-mail/password you set in <span class="mono">SEED_DEV_SUPER_ADMIN_*</span></td></tr>
+      <tr><td>Health</td><td><span class="mono">/api/v1/health</span>, <span class="mono">/api/v1/health/ready</span></td></tr>
+    </table>
+  </li>
+  <li><b>Checks</b> (code badalne ke baad)
+<pre>npx tsc --noEmit                   <span class="c"># type check</span>
+npm run lint
+npm test                           <span class="c"># full suite ~20 min, uses rishteyzindagi_test only</span></pre></li>
+</ol>
+<div class="box warn"><b>Ek folder = ek dev server.</b> Ek hi project folder mein do <span class="mono">npm run dev</span> mat chalao (port 3000 aur 3001). Dono same <span class="mono">.next</span> folder likhte hain aur pages "ChunkLoadError" dene lagte hain. Galti se ho jaaye to dono band karke ek hi chalao.</div>
+
+<h2>10. OTP — local mein bypass kyun karte hain, aur kaise</h2>
+<h3>10.1 Kyun?</h3>
+<p>Signup ke waqt member ke e-mail/mobile par 6-digit OTP jaata hai. OTP bhejne ke liye ek <b>asli vendor</b> chahiye — e-mail ke liye SMTP account, SMS ke liye Fast2SMS. Developer ki machine par yeh accounts/keys nahi hote (aur hone bhi nahi chahiye), isliye OTP kabhi pahunchega hi nahi aur signup aage nahi badhega. Isliye <b>sirf local machine par</b> OTP ko bypass karte hain taaki signup, login aur baaki features test ho sakein.</p>
+<div class="box danger"><b>Production mein OTP hamesha ON rakho.</b> OTP band karne se naye accounts ka e-mail/mobile "unverified" rehta hai — fake accounts ka khatra. Password reset, admin login/MFA aur contact change hamesha OTP maangte hain, chahe yeh setting kuch bhi ho.</div>
+<h3>10.2 Teen tareeke (local)</h3>
+<table>
+  <tr><th style="width:28%">Tareeka</th><th>Kaise</th><th style="width:28%">Kab use karein</th></tr>
+  <tr><td><b>A. OTP policy OFF</b> (sabse aasaan)</td><td><span class="mono">npm run dev:otp -- off</span> (ya <span class="mono">npm run dev:setup -- --no-otp</span>). Wapas ON: <span class="mono">npm run dev:otp -- on</span>. Same switch: Admin → Platform Settings → "Registration OTP verification".</td><td>Roz ka local development</td></tr>
+  <tr><td><b>B. Development mode</b> (OTP screen par dikhta hai)</td><td>Admin → Platform Settings → One-time passwords → Development mode ON. Signup ke code screen par "Show my verification code" dabao. Production mein yeh route 404 deta hai.</td><td>OTP wala screen/flow test karna ho</td></tr>
+  <tr><td><b>C. Asli e-mail OTP</b></td><td><span class="mono">.env</span> mein <span class="mono">SMTP_HOST</span>, <span class="mono">SMTP_PORT</span>, <span class="mono">SMTP_USER</span>, <span class="mono">SMTP_PASS</span>, <span class="mono">EMAIL_FROM</span> (local ke liye Mailpit/MailHog bhi chalega). SMS: <span class="mono">FAST2SMS_*</span> (see <span class="mono">FAST2SMS_SETUP.md</span>). Policy ON rakho.</td><td>Staging/production, ya delivery test</td></tr>
+</table>
+<p class="small">Setting database mein save hoti hai (<span class="mono">platform_settings</span> → key <span class="mono">otp.policy</span>), restart ke baad bhi rehti hai, aur har badlav audit log mein jaata hai.</p>
+
+<h2>11. Payments locally</h2>
+<ul>
+  <li><b>Local:</b> Razorpay/PhonePe keys na hon aur <span class="mono">NODE_ENV=development</span> ho to checkout built-in <b>dev gateway</b> use karta hai (screen par likha aata hai). Membership aur Personal Matchmaking dono isse test ho jaate hain.</li>
+  <li><b>Asli flow test:</b> Razorpay ke <b>test-mode</b> keys Admin → Platform Settings → Payment gateway mein daalo (<span class="mono">PAYMENT_SETUP.md</span>, <span class="mono">PROVIDER_TEST_SETUP.md</span>).</li>
+  <li><b>Production:</b> live keys sirf server ke environment / admin screen mein, kabhi git mein nahi. Test keys production mein refuse hoti hain.</li>
+</ul>
+
+<h2>12. Deploy to a server (production) — step by step</h2>
+<ol class="steps">
+  <li><b>Server:</b> Linux VPS/cloud with Node 20+, PostgreSQL 16+ (managed better), nginx/Caddy for HTTPS, a private S3-compatible bucket (AWS S3, Cloudflare R2, DO Spaces…), cron.</li>
+  <li><b>Code:</b> <span class="mono">git clone …</span> → <span class="mono">npm ci</span></li>
+  <li><b>Environment</b> (host ke secret store mein, <span class="mono">.env</span> file git mein nahi): <span class="mono">NODE_ENV=production</span>, <span class="mono">DATABASE_URL</span>, <span class="mono">APP_URL=https://your-domain</span>, <span class="mono">AUTH_SECRET</span>, <span class="mono">PAYMENT_CREDENTIALS_ENCRYPTION_KEY</span>, <span class="mono">ALLOWED_ORIGINS</span>, <span class="mono">TRUST_PROXY_HOPS=1</span>, <span class="mono">STORAGE_PROVIDER=s3</span> + <span class="mono">S3_*</span>, <span class="mono">SMTP_*</span> and/or <span class="mono">FAST2SMS_*</span>, <span class="mono">CRON_SECRET</span>. Full list: <span class="mono">PRODUCTION_ENV_REFERENCE.md</span>.
+<pre>npm run check:prod-env             <span class="c"># must print RESULT: OK</span></pre></li>
+  <li><b>Build, database, first admin, start</b>
+<pre>npm run build
+npm run db:migrate                 <span class="c"># 0000 … 0021</span>
+npm run db:seed                    <span class="c"># roles, reference data, PLACEHOLDER plan prices</span>
+npm run admin:create-super -- --email owner@your-domain --name "Site Owner"
+npm start                          <span class="c"># keep running with pm2 / systemd</span></pre></li>
+  <li><b>Before opening the site:</b> Admin → Membership Plans: set real prices · Admin → Personal Matchmaking → Settings: price + on-sale · Payment gateway live keys · OTP policy ON.</li>
+  <li><b>nginx/HTTPS:</b> forward to <span class="mono">127.0.0.1:3000</span>, pass <span class="mono">Host</span>, <span class="mono">X-Forwarded-For</span>, <span class="mono">X-Forwarded-Proto</span>; block <span class="mono">/api/v1/internal/</span> publicly.</li>
+  <li><b>Webhooks:</b> Razorpay <span class="mono">https://&lt;domain&gt;/api/v1/webhooks/razorpay</span>, PhonePe <span class="mono">…/webhooks/phonepe</span>.</li>
+  <li><b>Cron jobs</b> (<span class="mono">npm run job -- --list</span>):
+<pre>*/15 * * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- membership-expiry
+5    * * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- membership-reminders
+*/30 * * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- membership-renewal-failed
+*/10 * * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- payment-reconcile
+30   2 * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- account-deletion-finalize
+17   * * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- housekeeping
+30   3 * * 1  cd /srv/rishteyzindagi &amp;&amp; npm run job -- member-digest
+15   * * * *  cd /srv/rishteyzindagi &amp;&amp; npm run job -- membership-dunning</pre></li>
+  <li><b>After deploy:</b> <span class="mono">curl -f https://&lt;domain&gt;/api/v1/health/ready</span> → 200 · signup with real OTP · upload a photo · one test payment · run a backup + restore check (<span class="mono">BACKUP_DR.md</span>).</li>
+</ol>
+<h3>12.1 Later updates (every new version)</h3>
+<pre>git pull
+npm ci
+scripts/backup-secure.sh           <span class="c"># backup BEFORE migrating</span>
+npm run db:migrate
+npm run build
+<span class="c"># restart the app (pm2 restart / systemctl restart)</span></pre>
+
+<h2>13. Tests</h2>
+<ul>
+  <li><span class="mono">npm test</span> runs only against the database in <span class="mono">.env.test</span> and refuses anything that is not a local <span class="mono">rishteyzindagi_test</span>. It empties tables — never point it at real data.</li>
+  <li>A single file: <span class="mono">npx vitest run tests/matchmaking-payments.test.ts</span></li>
+  <li>After changing <span class="mono">src/server/db/schema.ts</span>: <span class="mono">npm run db:generate</span> → new file in <span class="mono">drizzle/</span> → <span class="mono">npm run db:migrate</span> on dev and test DB.</li>
+</ul>
+
+<h2>14. Troubleshooting</h2>
+<table>
+  <tr><th style="width:40%">Problem</th><th>Solution</th></tr>
+  <tr><td><span class="mono">DATABASE_URL is not set</span> / Invalid environment</td><td><span class="mono">.env</span> missing or not in the project root</td></tr>
+  <tr><td>"relation … does not exist"</td><td><span class="mono">npm run db:migrate</span> on the right database</td></tr>
+  <tr><td>ChunkLoadError / pages stuck loading</td><td>More than one <span class="mono">next dev</span> in the same folder — stop all, start one</td></tr>
+  <tr><td>Port 3000 busy</td><td>Stop the old server, or <span class="mono">npx next dev -p 3001</span> (only one server!)</td></tr>
+  <tr><td>Signup says service unavailable / no OTP arrives</td><td>Section 10 — policy OFF or dev mode ON locally</td></tr>
+  <tr><td>Search is empty</td><td>Profile must be complete + photo + approved + visible; <span class="mono">npm run dev:doctor</span> explains; or seed sample profiles</td></tr>
+  <tr><td>Interest says membership required</td><td>Correct — member needs an active plan (dev-setup members have one)</td></tr>
+  <tr><td>Admin login asks to change password</td><td>Temporary password from <span class="mono">admin:create-super</span> — set your own</td></tr>
+  <tr><td>Tests fail at start</td><td>PostgreSQL not running, wrong <span class="mono">.env.test</span>, or test DB not migrated/seeded</td></tr>
+</table>
+
+<h2>15. Useful commands</h2>
+<table>
+  <tr><th style="width:44%">Command</th><th>What it does</th></tr>
+  <tr><td><span class="mono">npm run dev</span> / <span class="mono">build</span> / <span class="mono">start</span></td><td>Run locally / production build / production server</td></tr>
+  <tr><td><span class="mono">npm run db:migrate</span> / <span class="mono">db:seed</span> / <span class="mono">db:generate</span></td><td>Apply migrations / reference data / new migration from schema</td></tr>
+  <tr><td><span class="mono">npm run dev:setup -- --no-otp</span> · <span class="mono">dev:doctor</span> · <span class="mono">dev:otp -- on|off</span></td><td>Local helpers (refuse to run in production / remote DB)</td></tr>
+  <tr><td><span class="mono">npx tsx scripts/seed-sample-profiles.ts --target=dev [--remove]</span></td><td>100 realistic sample profiles (local only)</td></tr>
+  <tr><td><span class="mono">npx tsx scripts/convert-photos-to-webp.ts --target=dev [--dry-run]</span></td><td>Convert old JPEG/PNG photos to WebP</td></tr>
+  <tr><td><span class="mono">npx tsx scripts/make-og-image.ts</span></td><td>Recreate the link-preview image</td></tr>
+  <tr><td><span class="mono">npm run admin:create-super -- --email … --name "…"</span></td><td>First Super Admin (production)</td></tr>
+  <tr><td><span class="mono">npm run job -- --list</span> · <span class="mono">npm run job -- &lt;name&gt;</span></td><td>Scheduled jobs</td></tr>
+  <tr><td><span class="mono">npm run check:prod-env</span> · <span class="mono">scan:secrets</span></td><td>Production env check · secret scanner</td></tr>
+</table>
+<p class="small">More detail: <span class="mono">LOCAL_SETUP.md</span>, <span class="mono">DEPLOYMENT_PRODUCTION.md</span>, <span class="mono">PAYMENT_SETUP.md</span>, <span class="mono">BACKUP_DR.md</span>, <span class="mono">API_REFERENCE.md</span>, <span class="mono">BACKEND.md</span>.</p>
+</section>
+
+<!-- ============================================================ PART C -->
+<section class="part">
+<div class="part-title">Part C — Project Flow Charts<small>How the system is built and how users, money and data move through it</small></div>
+
+<h2>16. System architecture</h2>
+<div class="fig">
+<svg width="720" height="430" viewBox="0 0 720 430" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="12">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1C2D4F"/></marker></defs>
+  <rect x="20" y="20" width="160" height="70" rx="10" fill="#EEF2F8" stroke="#1C2D4F"/>
+  <text x="100" y="48" text-anchor="middle" font-weight="700" fill="#1C2D4F">Browser</text>
+  <text x="100" y="66" text-anchor="middle" fill="#444">Member / visitor /</text>
+  <text x="100" y="80" text-anchor="middle" fill="#444">Super Admin</text>
+  <rect x="230" y="10" width="470" height="250" rx="12" fill="#FFF9EF" stroke="#A51E3B" stroke-dasharray="5 4"/>
+  <text x="245" y="30" font-weight="700" fill="#A51E3B">One Next.js 14 app (npm start / npm run dev)</text>
+  <rect x="250" y="45" width="200" height="56" rx="8" fill="#fff" stroke="#A51E3B"/>
+  <text x="350" y="68" text-anchor="middle" font-weight="700" fill="#1C2D4F">Pages (src/app)</text>
+  <text x="350" y="86" text-anchor="middle" fill="#444">website · /dashboard · /admin</text>
+  <rect x="480" y="45" width="200" height="56" rx="8" fill="#fff" stroke="#A51E3B"/>
+  <text x="580" y="68" text-anchor="middle" font-weight="700" fill="#1C2D4F">/bff/* proxy</text>
+  <text x="580" y="86" text-anchor="middle" fill="#444">session in httpOnly cookie</text>
+  <rect x="250" y="125" width="430" height="50" rx="8" fill="#fff" stroke="#A51E3B"/>
+  <text x="465" y="146" text-anchor="middle" font-weight="700" fill="#1C2D4F">REST API /api/v1/* (route handlers)</text>
+  <text x="465" y="163" text-anchor="middle" fill="#444">auth · rate limits · validation (zod) · RBAC</text>
+  <rect x="250" y="195" width="430" height="50" rx="8" fill="#fff" stroke="#A51E3B"/>
+  <text x="465" y="216" text-anchor="middle" font-weight="700" fill="#1C2D4F">Services (src/server/modules)</text>
+  <text x="465" y="233" text-anchor="middle" fill="#444">profiles · search · interactions · chat · payments · matchmaking · jobs</text>
+  <rect x="40" y="300" width="150" height="56" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/>
+  <text x="115" y="324" text-anchor="middle" font-weight="700" fill="#1e7a4f">PostgreSQL</text>
+  <text x="115" y="341" text-anchor="middle" fill="#444">Drizzle · 71 tables</text>
+  <rect x="210" y="300" width="150" height="56" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/>
+  <text x="285" y="324" text-anchor="middle" font-weight="700" fill="#1e7a4f">Photo storage</text>
+  <text x="285" y="341" text-anchor="middle" fill="#444">.storage-local / S3 (WebP)</text>
+  <rect x="380" y="300" width="150" height="56" rx="8" fill="#FDF0D2" stroke="#9a6b00"/>
+  <text x="455" y="324" text-anchor="middle" font-weight="700" fill="#9a6b00">Payment gateway</text>
+  <text x="455" y="341" text-anchor="middle" fill="#444">Razorpay / PhonePe / dev</text>
+  <rect x="550" y="300" width="150" height="56" rx="8" fill="#FDF0D2" stroke="#9a6b00"/>
+  <text x="625" y="324" text-anchor="middle" font-weight="700" fill="#9a6b00">OTP / messages</text>
+  <text x="625" y="341" text-anchor="middle" fill="#444">SMTP · Fast2SMS · WhatsApp</text>
+  <rect x="250" y="380" width="430" height="40" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/>
+  <text x="465" y="405" text-anchor="middle" fill="#1C2D4F"><tspan font-weight="700">Cron</tspan> → npm run job -- &lt;name&gt; (expiry, reminders, reconcile, digest…)</text>
+  <path d="M180 55 L248 70" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M450 73 L478 73" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M580 101 L580 123" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M465 175 L465 193" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M300 245 L130 298" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M380 245 L290 298" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M520 245 L460 298" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M620 245 L625 298" stroke="#1C2D4F" fill="none" marker-end="url(#a)"/>
+  <path d="M370 380 L370 247" stroke="#1C2D4F" fill="none" stroke-dasharray="4 3" marker-end="url(#a)"/>
+</svg></div>
+<div class="caption">Browser kabhi seedha API token nahi rakhta: pages /bff proxy se baat karte hain, jo cookie se session lagata hai. Sab kuch ek hi Next.js app mein hai.</div>
+
+<h2>17. Member journey</h2>
+<div class="fig">
+<svg width="720" height="460" viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="12">
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1C2D4F"/></marker></defs>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="20" y="20" width="150" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="95" y="48" text-anchor="middle">1. Signup /signup</text>
+  <rect x="200" y="20" width="150" height="46" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="275" y="40" text-anchor="middle">2. OTP verify</text><text x="275" y="56" text-anchor="middle" font-weight="400" font-size="10.5">(skipped if policy OFF)</text>
+  <rect x="380" y="20" width="150" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="455" y="48" text-anchor="middle">3. Set password</text>
+  <rect x="560" y="20" width="140" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="630" y="40" text-anchor="middle">4. Fill profile</text><text x="630" y="56" text-anchor="middle" font-weight="400" font-size="10.5">12 required fields</text>
+  <rect x="560" y="110" width="140" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="630" y="130" text-anchor="middle">5. Upload photo</text><text x="630" y="146" text-anchor="middle" font-weight="400" font-size="10.5">→ stored as WebP</text>
+  <rect x="360" y="110" width="170" height="46" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="445" y="130" text-anchor="middle">6. Manual approval?</text><text x="445" y="146" text-anchor="middle" font-weight="400" font-size="10.5">Admin → Visibility Queue</text>
+  <rect x="140" y="110" width="190" height="46" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="235" y="130" text-anchor="middle">7. Visible in search</text><text x="235" y="146" text-anchor="middle" font-weight="400" font-size="10.5">+ recommendations</text>
+  <rect x="140" y="200" width="190" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="235" y="220" text-anchor="middle">8. Partner preferences</text><text x="235" y="236" text-anchor="middle" font-weight="400" font-size="10.5">→ compatibility score</text>
+  <rect x="360" y="200" width="170" height="46" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="445" y="220" text-anchor="middle">9. Active membership?</text><text x="445" y="236" text-anchor="middle" font-weight="400" font-size="10.5">needed to send interest</text>
+  <rect x="560" y="200" width="140" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="630" y="228" text-anchor="middle">Buy plan (sec. 18)</text>
+  <rect x="360" y="290" width="170" height="46" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="445" y="318" text-anchor="middle">10. Send interest</text>
+  <rect x="140" y="290" width="190" height="46" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="235" y="310" text-anchor="middle">11. Other member accepts?</text><text x="235" y="326" text-anchor="middle" font-weight="400" font-size="10.5">declined → ends</text>
+  <rect x="140" y="380" width="190" height="46" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="235" y="408" text-anchor="middle">12. Match created</text>
+  <rect x="360" y="380" width="170" height="46" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="445" y="400" text-anchor="middle">13. Chat</text><text x="445" y="416" text-anchor="middle" font-weight="400" font-size="10.5">needs membership</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none">
+  <path d="M170 43 L198 43" marker-end="url(#b)"/><path d="M350 43 L378 43" marker-end="url(#b)"/><path d="M530 43 L558 43" marker-end="url(#b)"/>
+  <path d="M630 66 L630 108" marker-end="url(#b)"/><path d="M560 133 L532 133" marker-end="url(#b)"/><path d="M360 133 L332 133" marker-end="url(#b)"/>
+  <path d="M235 156 L235 198" marker-end="url(#b)"/><path d="M330 223 L358 223" marker-end="url(#b)"/>
+  <path d="M530 216 L558 216" marker-end="url(#b)"/><path d="M558 232 L532 232" marker-end="url(#b)"/>
+  <path d="M445 246 L445 288" marker-end="url(#b)"/><path d="M360 313 L332 313" marker-end="url(#b)"/>
+  <path d="M235 336 L235 378" marker-end="url(#b)"/><path d="M330 403 L358 403" marker-end="url(#b)"/>
+  </g>
+  <text x="537" y="211" font-size="10" fill="#9a6b00">no</text><text x="450" y="268" font-size="10" fill="#1e7a4f">yes</text>
+</svg></div>
+<div class="caption">Photo nahi hai to profile par default avatar dikhta hai, lekin search mein aane ke liye asli photo zaroori hai. Interest bhejne aur chat ke liye active membership (ya Personal Matchmaking access) chahiye.</div>
+
+<h2>18. Membership payment flow</h2>
+<div class="fig">
+<svg width="720" height="250" viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="12">
+  <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1C2D4F"/></marker></defs>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="15" y="30" width="130" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="80" y="52" text-anchor="middle">Choose plan</text><text x="80" y="68" text-anchor="middle" font-weight="400" font-size="10.5">/membership</text>
+  <rect x="175" y="30" width="130" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="240" y="52" text-anchor="middle">Checkout</text><text x="240" y="68" text-anchor="middle" font-weight="400" font-size="10.5">PENDING payment</text>
+  <rect x="335" y="30" width="130" height="50" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="400" y="52" text-anchor="middle">Gateway</text><text x="400" y="68" text-anchor="middle" font-weight="400" font-size="10.5">Razorpay / PhonePe</text>
+  <rect x="495" y="30" width="210" height="50" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="600" y="52" text-anchor="middle">Server verifies</text><text x="600" y="68" text-anchor="middle" font-weight="400" font-size="10.5">signature · webhook · reconcile job</text>
+  <rect x="495" y="130" width="210" height="50" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="600" y="152" text-anchor="middle">SUCCESS</text><text x="600" y="168" text-anchor="middle" font-weight="400" font-size="10.5">membership ACTIVE + invoice + notice</text>
+  <rect x="255" y="130" width="210" height="50" rx="8" fill="#fbe3e8" stroke="#a51e3b"/><text x="360" y="152" text-anchor="middle">FAILED / closed window</text><text x="360" y="168" text-anchor="middle" font-weight="400" font-size="10.5">retry or "Continue payment"</text>
+  <rect x="15" y="130" width="210" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="120" y="152" text-anchor="middle">Jobs (cron)</text><text x="120" y="168" text-anchor="middle" font-weight="400" font-size="10.5">expiry · reminders · dunning</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none">
+  <path d="M145 55 L173 55" marker-end="url(#c)"/><path d="M305 55 L333 55" marker-end="url(#c)"/><path d="M465 55 L493 55" marker-end="url(#c)"/>
+  <path d="M600 80 L600 128" marker-end="url(#c)"/><path d="M540 80 L420 128" marker-end="url(#c)"/><path d="M600 180 L600 198 L120 198 L120 182" stroke-dasharray="4 3" marker-end="url(#c)"/>
+  </g>
+  <text x="20" y="225" font-size="11" fill="#5d6475">Browser kabhi payment ko "paid" nahi bata sakta: sirf server ka verify (signature / webhook / reconcile) payment ko SUCCESS karta hai.</text>
+  <text x="20" y="242" font-size="11" fill="#5d6475">Local mein bina keys ke "dev gateway" yahi flow simulate karta hai.</text>
+</svg></div>
+
+<h2>19. Personal Matchmaking (Super Admin)</h2>
+<div class="fig">
+<svg width="720" height="330" viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="12">
+  <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1C2D4F"/></marker></defs>
+  <text x="15" y="20" font-weight="700" fill="#A51E3B">A. Paid service</text>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="15" y="30" width="125" height="48" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="77" y="51" text-anchor="middle">Member buys</text><text x="77" y="67" text-anchor="middle" font-weight="400" font-size="10.5">or free offer accepted</text>
+  <rect x="160" y="30" width="125" height="48" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="222" y="51" text-anchor="middle">Case ACTIVE</text><text x="222" y="67" text-anchor="middle" font-weight="400" font-size="10.5">30 days access</text>
+  <rect x="305" y="30" width="140" height="48" rx="8" fill="#FFF9EF" stroke="#A51E3B"/><text x="375" y="51" text-anchor="middle">Super Admin picks</text><text x="375" y="67" text-anchor="middle" font-weight="400" font-size="10.5">best matches (scores)</text>
+  <rect x="465" y="30" width="110" height="48" rx="8" fill="#FFF9EF" stroke="#A51E3B"/><text x="520" y="51" text-anchor="middle">Approve</text><text x="520" y="67" text-anchor="middle" font-weight="400" font-size="10.5">→ Send</text>
+  <rect x="595" y="30" width="110" height="48" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="650" y="51" text-anchor="middle">Member sees</text><text x="650" y="67" text-anchor="middle" font-weight="400" font-size="10.5">interested / not</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none"><path d="M140 54 L158 54" marker-end="url(#d)"/><path d="M285 54 L303 54" marker-end="url(#d)"/><path d="M445 54 L463 54" marker-end="url(#d)"/><path d="M575 54 L593 54" marker-end="url(#d)"/></g>
+
+  <text x="15" y="120" font-weight="700" fill="#A51E3B">B. Introductions (no payment needed)</text>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="15" y="130" width="140" height="48" rx="8" fill="#FFF9EF" stroke="#A51E3B"/><text x="85" y="151" text-anchor="middle">Members tab</text><text x="85" y="167" text-anchor="middle" font-weight="400" font-size="10.5">tick 2 members</text>
+  <rect x="175" y="130" width="140" height="48" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="245" y="151" text-anchor="middle">Eligibility check</text><text x="245" y="167" text-anchor="middle" font-weight="400" font-size="10.5">status·blocks·18+·opt-out</text>
+  <rect x="335" y="130" width="120" height="48" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="395" y="151" text-anchor="middle">Both notified</text><text x="395" y="167" text-anchor="middle" font-weight="400" font-size="10.5">PENDING</text>
+  <rect x="475" y="130" width="110" height="48" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="530" y="151" text-anchor="middle">Each answers</text><text x="530" y="167" text-anchor="middle" font-weight="400" font-size="10.5">accept/decline</text>
+  <rect x="605" y="130" width="100" height="48" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="655" y="151" text-anchor="middle">Both yes</text><text x="655" y="167" text-anchor="middle" font-weight="400" font-size="10.5">→ normal interest</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none"><path d="M155 154 L173 154" marker-end="url(#d)"/><path d="M315 154 L333 154" marker-end="url(#d)"/><path d="M455 154 L473 154" marker-end="url(#d)"/><path d="M585 154 L603 154" marker-end="url(#d)"/></g>
+
+  <text x="15" y="220" font-weight="700" fill="#A51E3B">C. Invitations and Company Verified</text>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="15" y="230" width="200" height="48" rx="8" fill="#FFF9EF" stroke="#A51E3B"/><text x="115" y="251" text-anchor="middle">Invite: offer or free</text><text x="115" y="267" text-anchor="middle" font-weight="400" font-size="10.5">free starts only after member consent</text>
+  <rect x="240" y="230" width="220" height="48" rx="8" fill="#FFF9EF" stroke="#A51E3B"/><text x="350" y="251" text-anchor="middle">Company Verified review</text><text x="350" y="267" text-anchor="middle" font-weight="400" font-size="10.5">open review → approve / reject → revoke</text>
+  <rect x="485" y="230" width="220" height="48" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="595" y="251" text-anchor="middle">Badge on profile</text><text x="595" y="267" text-anchor="middle" font-weight="400" font-size="10.5">only when approved · audited</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none"><path d="M460 254 L483 254" marker-end="url(#d)"/></g>
+  <text x="15" y="310" font-size="11" fill="#5d6475">Introduction kabhi apne aap match ya chat nahi kholti. Sab actions sirf Super Admin kar sakta hai aur audit log mein jaate hain.</text>
+</svg></div>
+
+<h2>20. Developer workflow (code change → live)</h2>
+<div class="fig">
+<svg width="720" height="300" viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="12">
+  <defs><marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1C2D4F"/></marker></defs>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="15" y="20" width="130" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="80" y="42" text-anchor="middle">git pull</text><text x="80" y="58" text-anchor="middle" font-weight="400" font-size="10.5">npm ci</text>
+  <rect x="165" y="20" width="130" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="230" y="42" text-anchor="middle">db:migrate</text><text x="230" y="58" text-anchor="middle" font-weight="400" font-size="10.5">dev + test DB</text>
+  <rect x="315" y="20" width="130" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="380" y="42" text-anchor="middle">npm run dev</text><text x="380" y="58" text-anchor="middle" font-weight="400" font-size="10.5">make changes</text>
+  <rect x="465" y="20" width="240" height="50" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="585" y="42" text-anchor="middle">Schema changed?</text><text x="585" y="58" text-anchor="middle" font-weight="400" font-size="10.5">yes → npm run db:generate → db:migrate</text>
+  <rect x="465" y="110" width="240" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="585" y="132" text-anchor="middle">Checks</text><text x="585" y="148" text-anchor="middle" font-weight="400" font-size="10.5">tsc --noEmit · lint · npm test</text>
+  <rect x="245" y="110" width="200" height="50" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="345" y="132" text-anchor="middle">git commit + push</text><text x="345" y="148" text-anchor="middle" font-weight="400" font-size="10.5">secret scan runs (hook)</text>
+  <rect x="15" y="110" width="210" height="50" rx="8" fill="#FFF9EF" stroke="#A51E3B"/><text x="120" y="132" text-anchor="middle">Staging test</text><text x="120" y="148" text-anchor="middle" font-weight="400" font-size="10.5">real OTP + test payment</text>
+  <rect x="15" y="200" width="690" height="60" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="360" y="224" text-anchor="middle">Production deploy</text>
+  <text x="360" y="244" text-anchor="middle" font-weight="400" font-size="11">git pull → npm ci → backup → db:migrate → npm run build → restart → /api/v1/health/ready = 200</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none">
+  <path d="M145 45 L163 45" marker-end="url(#e)"/><path d="M295 45 L313 45" marker-end="url(#e)"/><path d="M445 45 L463 45" marker-end="url(#e)"/>
+  <path d="M585 70 L585 108" marker-end="url(#e)"/><path d="M465 135 L447 135" marker-end="url(#e)"/><path d="M245 135 L227 135" marker-end="url(#e)"/>
+  <path d="M120 160 L120 198" marker-end="url(#e)"/>
+  </g>
+  <text x="15" y="290" font-size="11" fill="#5d6475">Har migration se pehle production database ka backup. Migrations sirf aage badhti hain (additive) — rollback DEPLOYMENT.md §7 mein.</text>
+</svg></div>
+
+<div class="box good nobreak" style="margin-top:12pt"><b>Shuruaat ka sabse chhota raasta (naya developer):</b> section 7 ka commit/push confirm karo → section 9 ke steps 1–7 → <span class="mono">/admin/login</span> aur <span class="mono">test.priya@example.com</span> se login karke dekho → section 12 deploy ke liye.</div>
+</section>
+
+</body>
+</html>

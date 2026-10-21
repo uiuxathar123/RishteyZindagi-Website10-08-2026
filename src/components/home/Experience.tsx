@@ -19,8 +19,11 @@ export function Experience() {
             <img
               src="https://images.pexels.com/photos/7580948/pexels-photo-7580948.jpeg?auto=compress&cs=tinysrgb&w=800&h=1000&fit=crop"
               alt="A member reviewing her matrimonial profile on a laptop."
+              width={800}
+              height={1000}
               className="h-full w-full object-cover"
               loading="lazy"
+              decoding="async"
             />
           </div>
           <div className="absolute -bottom-6 -right-4 hidden w-56 rounded-lg border border-rz-border bg-white p-4 shadow-card sm:block">

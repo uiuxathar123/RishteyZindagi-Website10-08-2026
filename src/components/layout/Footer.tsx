@@ -29,6 +29,7 @@ const MATRIMONIAL_LINKS = [
   { href: "/search", label: "Browse Profiles" },
   { href: "/signup", label: "Recommended Profiles" },
   { href: "/signup", label: "Partner Preferences" },
+  { href: "/personal-matchmaking", label: "Personal Matchmaking" },
   { href: "/success-stories", label: "Success Stories" },
   { href: "/search?country=India", label: "India Matrimony" },
   { href: "/search", label: "NRI Matrimony" },

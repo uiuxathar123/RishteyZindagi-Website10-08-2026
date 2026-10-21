@@ -138,7 +138,7 @@ describe("Public / gated profile view", () => {
 
     const res = await getPhotoFile(getReq(`http://localhost/api/v1/profiles/photos/${photoId}/file`, viewer.sessionToken), photoCtx(photoId));
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("content-type")).toBe("image/webp"); // uploads are re-encoded as WebP
   });
 
   it("gated photo file route: another authenticated user CANNOT fetch a photo while the profile is not ready", async () => {

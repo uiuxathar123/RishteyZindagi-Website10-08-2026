@@ -23,6 +23,8 @@ import * as paymentsRepo from "@/server/modules/payments/payments.repository";
 import * as pcpRepo from "@/server/modules/payments/payments-pcp.repository";
 import { reconcilePaymentFromGateway } from "@/server/modules/payments/webhooks.service";
 import { syncRefund } from "@/server/modules/payments/refunds.service";
+import { fulfilMatchmakingPayment } from "@/server/modules/matchmaking/matchmaking-fulfilment";
+import { listPaidPaymentsAwaitingFulfilment } from "@/server/modules/matchmaking/matchmaking.repository";
 import { finalizeExpiredDeletions } from "@/server/modules/account/account-deletion.service";
 import type { JobDefinition } from "../types";
 
@@ -55,7 +57,9 @@ async function closeStalePayment(payment: paymentsRepo.PaymentRow): Promise<bool
     userId: payment.userId,
     channel: "IN_APP",
     title: "Payment not completed",
-    body: "Your membership payment was not completed in time and has been closed. You can try again from Membership plans.",
+    body: payment.matchmakingCaseId
+      ? "Your Personal Matchmaking payment was not completed in time and has been closed. You can try again from the Personal Matchmaking page."
+      : "Your membership payment was not completed in time and has been closed. You can try again from Membership plans.",
     dedupeKey: `payment_failed:${payment.id}`,
   });
   return true;
@@ -67,7 +71,7 @@ export const paymentReconcileJob: JobDefinition = {
   suggestedSchedule: "*/10 * * * *",
   async run() {
     const expiryMs = paymentExpiryMinutes() * 60_000;
-    const stats = { checked: 0, resolved: 0, expiredClosed: 0, stillPending: 0, gatewayErrors: 0, refundsChecked: 0, refundsResolved: 0, lateCaptureChecked: 0 };
+    const stats = { checked: 0, resolved: 0, expiredClosed: 0, stillPending: 0, gatewayErrors: 0, refundsChecked: 0, refundsResolved: 0, lateCaptureChecked: 0, matchmakingFulfilled: 0 };
 
     // 1 + 2 -----------------------------------------------------------------
     const pending = await pcpRepo.listPendingOlderThan(new Date(Date.now() - RECONCILE_MIN_AGE_MINUTES * 60_000), MAX_PER_RUN);
@@ -92,6 +96,16 @@ export const paymentReconcileJob: JobDefinition = {
         // Gateway unreachable / error: leave the payment untouched (it may well be paid).
         stats.gatewayErrors++;
         logError("job-payment-reconcile-item", err, { paymentId: payment.id });
+      }
+    }
+
+    // 2b: a verified Personal Matchmaking payment whose (idempotent) fulfilment was interrupted is completed here.
+    for (const paymentId of await listPaidPaymentsAwaitingFulfilment()) {
+      try {
+        const paid = await paymentsRepo.findById(paymentId);
+        if (paid && (await fulfilMatchmakingPayment(paid)) === "ACTIVATED") stats.matchmakingFulfilled++;
+      } catch (err) {
+        logError("job-payment-reconcile-matchmaking", err, { paymentId });
       }
     }
 

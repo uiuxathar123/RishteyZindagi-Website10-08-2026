@@ -107,6 +107,13 @@ describe("database", () => {
       "community_group_posts",
       "community_post_reports",
       "renewal_cycles",
+      // Personal Matchmaking (owner-approved additive tables; drizzle/0019): cases, suggestions and case history; and
+      // drizzle/0020: Super Admin introductions; drizzle/0021: invitations — 71 in total.
+      "matchmaking_cases",
+      "matchmaking_suggestions",
+      "matchmaking_case_events",
+      "matchmaking_introductions",
+      "matchmaking_invitations",
     ];
 
     for (const table of expected) {

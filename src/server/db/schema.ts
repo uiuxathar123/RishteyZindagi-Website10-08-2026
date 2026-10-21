@@ -46,6 +46,8 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  check,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 const id = () =>
@@ -406,6 +408,16 @@ export const profiles = pgTable(
     //   photoVisibility:   MEMBERS | ACCEPTED_ONLY (ACCEPTED_ONLY = photos only for people with an accepted interest/match)
     profileVisibility: text("profile_visibility").notNull().default("VISIBLE"),
     photoVisibility: text("photo_visibility").notNull().default("MEMBERS"),
+    // Personal Matchmaking: true = never offered to other members as a curated matchmaking suggestion.
+    // Existing rows default to false, i.e. they stay exactly as eligible as they already are for search/recommendations.
+    matchmakingOptOut: boolean("matchmaking_opt_out").notNull().default(false),
+    // "Company Verified": a separate review decided only by a Super Admin (never the staff "profiles.verify" status
+    // above, and never set as a side effect of a matchmaking introduction). NONE -> PENDING (review opened) ->
+    // APPROVED | REJECTED; APPROVED -> REVOKED; a REJECTED/REVOKED profile can be reviewed again. Only APPROVED shows
+    // the badge. Reviewer and time of the latest decision live here; every change is also in audit_logs.
+    companyVerificationStatus: text("company_verification_status").notNull().default("NONE"),
+    companyVerificationReviewedAt: timestamp("company_verification_reviewed_at", { withTimezone: true }),
+    companyVerificationReviewedByAdminId: uuid("company_verification_reviewed_by_admin_id").references(() => adminUsers.id),
     showLastActive: boolean("show_last_active").notNull().default(true),
     // B19: manual profile-approval mode. APPROVED (default — every pre-existing profile, and every profile created
     // while the Super Admin switch is off) | PENDING (became ready while manual approval was on; hidden from every
@@ -439,6 +451,10 @@ export const profiles = pgTable(
     heightIdx: index("profiles_height_idx").on(t.heightCm),
     educationIdx: index("profiles_education_idx").on(t.educationId),
     incomeIdx: index("profiles_income_idx").on(t.incomeCurrency, t.incomeMinAmount, t.incomeMaxAmount),
+    companyVerificationCheck: check(
+      "profiles_company_verification_status_check",
+      sql`${t.companyVerificationStatus} IN ('NONE', 'PENDING', 'APPROVED', 'REJECTED', 'REVOKED')`
+    ),
   })
 );
 
@@ -942,9 +958,14 @@ export const payments = pgTable(
     verificationMethod: text("verification_method"), // "AUTO" | "MANUAL" | null
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // Personal Matchmaking: what a non-membership payment is for. Every attempt (including retries and late captures)
+    // points at its case, so verification can always find what to fulfil. Never set together with membership_id.
+    matchmakingCaseId: uuid("matchmaking_case_id").references((): AnyPgColumn => matchmakingCases.id),
   },
   (t) => ({
     userIdx: index("payments_user_idx").on(t.userId),
+    matchmakingCaseIdx: index("payments_matchmaking_case_idx").on(t.matchmakingCaseId),
+    singlePurchaseCheck: check("payments_single_purchase_check", sql`NOT (${t.membershipId} IS NOT NULL AND ${t.matchmakingCaseId} IS NOT NULL)`),
   })
 );
 
@@ -1870,5 +1891,231 @@ export const renewalCycles = pgTable(
   (t) => ({
     membershipIdx: uniqueIndex("renewal_cycles_membership_idx").on(t.membershipId),
     stateIdx: index("renewal_cycles_state_idx").on(t.state, t.lapsedAt),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Personal Matchmaking (paid service, run by Super Admin only)
+// ---------------------------------------------------------------------------
+
+/**
+ * One purchase of the Personal Matchmaking service.
+ * Status: PENDING_PAYMENT -> ACTIVE (verified payment) -> IN_PROGRESS -> COMPLETED, or CANCELLED / REFUNDED.
+ * Price, currency and the included access period are snapshotted from the server-side `personal_matchmaking`
+ * setting when the purchase starts; nothing here comes from the client. A member has at most one open case
+ * (PENDING_PAYMENT / ACTIVE / IN_PROGRESS), enforced by a partial unique index. Cases never expire on their own.
+ *
+ * Included access: a verified purchase grants member access (interests and chat, the same gate as an active
+ * membership) until `included_access_until`. A membership row cannot carry this, because every membership must
+ * reference a real, priced plan (see membership-gate.ts). A full refund sets `included_access_revoked_at`.
+ */
+export const matchmakingCases = pgTable(
+  "matchmaking_cases",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("PENDING_PAYMENT"),
+    consentedAt: timestamp("consented_at", { withTimezone: true }).notNull(),
+    consentVersion: text("consent_version").notNull(),
+    customerNotes: text("customer_notes"),
+    priceInPaise: integer("price_in_paise").notNull(),
+    currency: text("currency").notNull(),
+    includedMembershipDays: integer("included_membership_days").notNull(),
+    /** The payment whose verified success activated this case (set exactly once). */
+    paidPaymentId: uuid("paid_payment_id").references((): AnyPgColumn => payments.id),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    includedAccessUntil: timestamp("included_access_until", { withTimezone: true }),
+    includedAccessRevokedAt: timestamp("included_access_revoked_at", { withTimezone: true }),
+    /** Claimed (compare-and-swap) by whoever issues the invoice, so a replayed fulfilment can never issue a second one. */
+    invoiceClaimedAt: timestamp("invoice_claimed_at", { withTimezone: true }),
+    /** A free case a Super Admin offered and the member accepted (with consent): no payment, price 0, no invoice. */
+    complimentary: boolean("complimentary").notNull().default(false),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("matchmaking_cases_user_idx").on(t.userId),
+    statusIdx: index("matchmaking_cases_status_idx").on(t.status, t.createdAt),
+    oneOpenPerUser: uniqueIndex("matchmaking_cases_one_open_per_user_idx")
+      .on(t.userId)
+      .where(sql`${t.status} IN ('PENDING_PAYMENT', 'ACTIVE', 'IN_PROGRESS')`),
+    paidPaymentIdx: uniqueIndex("matchmaking_cases_paid_payment_idx").on(t.paidPaymentId),
+    statusCheck: check(
+      "matchmaking_cases_status_check",
+      sql`${t.status} IN ('PENDING_PAYMENT', 'ACTIVE', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'REFUNDED')`
+    ),
+    amountsCheck: check(
+      "matchmaking_cases_amounts_check",
+      sql`(${t.priceInPaise} > 0 OR (${t.complimentary} AND ${t.priceInPaise} = 0)) AND ${t.includedMembershipDays} >= 0`
+    ),
+  })
+);
+
+/**
+ * A profile a Super Admin proposes for a case. PROPOSED -> APPROVED -> SENT (now visible to the customer), or
+ * WITHDRAWN at any point. Only SENT suggestions are ever shown to the customer, and eligibility is re-checked every
+ * time one is generated, sent or read. A suggestion never creates an interest, match or chat.
+ */
+export const matchmakingSuggestions = pgTable(
+  "matchmaking_suggestions",
+  {
+    id: id(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => matchmakingCases.id, { onDelete: "cascade" }),
+    candidateUserId: uuid("candidate_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").notNull(), // AUTO | MANUAL
+    score: integer("score"),
+    scoreBreakdown: jsonb("score_breakdown"),
+    status: text("status").notNull().default("PROPOSED"),
+    response: text("response").notNull().default("PENDING"), // PENDING | INTERESTED | NOT_INTERESTED
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdByAdminId: uuid("created_by_admin_id").references(() => adminUsers.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    caseCandidateIdx: uniqueIndex("matchmaking_suggestions_case_candidate_idx").on(t.caseId, t.candidateUserId),
+    caseStatusIdx: index("matchmaking_suggestions_case_status_idx").on(t.caseId, t.status),
+    sourceCheck: check("matchmaking_suggestions_source_check", sql`${t.source} IN ('AUTO', 'MANUAL')`),
+    statusCheck: check("matchmaking_suggestions_status_check", sql`${t.status} IN ('PROPOSED', 'APPROVED', 'SENT', 'WITHDRAWN')`),
+    responseCheck: check("matchmaking_suggestions_response_check", sql`${t.response} IN ('PENDING', 'INTERESTED', 'NOT_INTERESTED')`),
+  })
+);
+
+/** Case history: status changes, notes (internal or customer-visible), consent and suggestion workflow events. */
+export const matchmakingCaseEvents = pgTable(
+  "matchmaking_case_events",
+  {
+    id: id(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => matchmakingCases.id, { onDelete: "cascade" }),
+    actorType: text("actor_type").notNull(), // ADMIN | USER | SYSTEM
+    actorId: uuid("actor_id"),
+    kind: text("kind").notNull(), // STATUS_CHANGE | NOTE | SUGGESTION | CONSENT
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    note: text("note"),
+    customerVisible: boolean("customer_visible").notNull().default(false),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    caseCreatedIdx: index("matchmaking_case_events_case_created_idx").on(t.caseId, t.createdAt),
+    actorTypeCheck: check("matchmaking_case_events_actor_type_check", sql`${t.actorType} IN ('ADMIN', 'USER', 'SYSTEM')`),
+    kindCheck: check("matchmaking_case_events_kind_check", sql`${t.kind} IN ('STATUS_CHANGE', 'NOTE', 'SUGGESTION', 'CONSENT')`),
+  })
+);
+
+/**
+ * A Super Admin-initiated introduction between two members — independent of any paid Personal Matchmaking case
+ * (neither member has to have bought the service). Both members must pass the normal eligibility rules in both
+ * directions when it is created, answered and read. Each member answers separately:
+ *   member response: PENDING -> ACCEPTED | DECLINED; ACCEPTED -> WITHDRAWN.
+ *   introduction:    PENDING -> MUTUALLY_ACCEPTED (both accepted) | DECLINED (either declined) | WITHDRAWN (a member
+ *                    withdrew, or the Super Admin withdrew it); MUTUALLY_ACCEPTED -> WITHDRAWN.
+ * An introduction is consent to be introduced only: it never creates an interest, a match or a chat — those still
+ * need the existing interest flow (and its membership rule). The pair is stored ordered (user_a_id < user_b_id), so
+ * one partial unique index allows a single open (PENDING / MUTUALLY_ACCEPTED) introduction per pair.
+ */
+export const matchmakingIntroductions = pgTable(
+  "matchmaking_introductions",
+  {
+    id: id(),
+    userAId: uuid("user_a_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userBId: uuid("user_b_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("PENDING"),
+    userAResponse: text("user_a_response").notNull().default("PENDING"),
+    userARespondedAt: timestamp("user_a_responded_at", { withTimezone: true }),
+    userBResponse: text("user_b_response").notNull().default("PENDING"),
+    userBRespondedAt: timestamp("user_b_responded_at", { withTimezone: true }),
+    /** Optional message from the matchmaking team, shown to both members. */
+    messageToMembers: text("message_to_members"),
+    /** Internal only — never shown to members. */
+    internalNote: text("internal_note"),
+    /** Compatibility at creation, each direction (null when that member has no partner preferences). */
+    scoreAToB: integer("score_a_to_b"),
+    scoreBToA: integer("score_b_to_a"),
+    createdByAdminId: uuid("created_by_admin_id")
+      .notNull()
+      .references(() => adminUsers.id),
+    withdrawnByAdminId: uuid("withdrawn_by_admin_id").references(() => adminUsers.id),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userAIdx: index("matchmaking_introductions_user_a_idx").on(t.userAId, t.createdAt),
+    userBIdx: index("matchmaking_introductions_user_b_idx").on(t.userBId, t.createdAt),
+    statusIdx: index("matchmaking_introductions_status_idx").on(t.status, t.createdAt),
+    oneOpenPerPair: uniqueIndex("matchmaking_introductions_one_open_per_pair_idx")
+      .on(t.userAId, t.userBId)
+      .where(sql`${t.status} IN ('PENDING', 'MUTUALLY_ACCEPTED')`),
+    orderedPairCheck: check("matchmaking_introductions_ordered_pair_check", sql`${t.userAId} < ${t.userBId}`),
+    statusCheck: check(
+      "matchmaking_introductions_status_check",
+      sql`${t.status} IN ('PENDING', 'MUTUALLY_ACCEPTED', 'DECLINED', 'WITHDRAWN')`
+    ),
+    responseCheck: check(
+      "matchmaking_introductions_response_check",
+      sql`${t.userAResponse} IN ('PENDING', 'ACCEPTED', 'DECLINED', 'WITHDRAWN') AND ${t.userBResponse} IN ('PENDING', 'ACCEPTED', 'DECLINED', 'WITHDRAWN')`
+    ),
+  })
+);
+
+/**
+ * A Super Admin's invitation to Personal Matchmaking, for any member — whether or not they ever looked at the
+ * service. OFFER: the member is told about the service and buys it through the normal checkout (normal price,
+ * normal payment rules). COMPLIMENTARY: the service is offered free; nothing starts until the member accepts it with
+ * the same consent as a purchase, which then opens a complimentary case (no payment) with the included access set
+ * here. PENDING -> ACCEPTED | DECLINED (by the member) | REVOKED (by a Super Admin). One pending invitation per member.
+ */
+export const matchmakingInvitations = pgTable(
+  "matchmaking_invitations",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // OFFER | COMPLIMENTARY
+    status: text("status").notNull().default("PENDING"),
+    messageToMember: text("message_to_member"),
+    /** COMPLIMENTARY only: the member access (interests and chat) the free case includes. */
+    includedMembershipDays: integer("included_membership_days"),
+    invitedByAdminId: uuid("invited_by_admin_id")
+      .notNull()
+      .references(() => adminUsers.id),
+    revokedByAdminId: uuid("revoked_by_admin_id").references(() => adminUsers.id),
+    /** The case this invitation led to (the complimentary case, or the case the member opened at checkout). */
+    caseId: uuid("case_id").references(() => matchmakingCases.id, { onDelete: "set null" }),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("matchmaking_invitations_user_idx").on(t.userId, t.createdAt),
+    statusIdx: index("matchmaking_invitations_status_idx").on(t.status, t.createdAt),
+    onePendingPerUser: uniqueIndex("matchmaking_invitations_one_pending_per_user_idx")
+      .on(t.userId)
+      .where(sql`${t.status} = 'PENDING'`),
+    kindCheck: check("matchmaking_invitations_kind_check", sql`${t.kind} IN ('OFFER', 'COMPLIMENTARY')`),
+    statusCheck: check("matchmaking_invitations_status_check", sql`${t.status} IN ('PENDING', 'ACCEPTED', 'DECLINED', 'REVOKED')`),
+    daysCheck: check(
+      "matchmaking_invitations_days_check",
+      sql`(${t.kind} = 'OFFER' AND ${t.includedMembershipDays} IS NULL) OR (${t.kind} = 'COMPLIMENTARY' AND ${t.includedMembershipDays} BETWEEN 0 AND 3650)`
+    ),
   })
 );

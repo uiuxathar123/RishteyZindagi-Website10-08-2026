@@ -7,6 +7,7 @@
  * rbac.test.ts already has for admin_roles/permissions — see
  * BACKEND.md's B3 section).
  */
+import { deflateSync } from "node:zlib";
 import { NextRequest } from "next/server";
 import { POST as register } from "@/app/api/v1/auth/register/route";
 import { POST as verifySignupOtp } from "@/app/api/v1/auth/verify-signup-otp/route";
@@ -147,40 +148,48 @@ export function fullProfilePatchBody(refs: ReferenceIds) {
   };
 }
 
-/** A tiny valid PNG (1x1, red pixel) as a Buffer — real PNG magic bytes
- * and a real (if minimal) IHDR chunk, so inspectImage() genuinely
- * recognizes it rather than the test relying on a mocked image library. */
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const typed = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(typed), 0);
+  return Buffer.concat([length, typed, crc]);
+}
+
+/** A genuinely valid RGB PNG of the given size (a soft gradient), built synchronously.
+ * Uploads are decoded and re-encoded as WebP on the server, so test photos must be
+ * real, decodable images rather than just a correct header. */
 export function tinyPngBuffer(width = 300, height = 300): Buffer {
-  // We don't need real pixel data for the upload/validation tests — just
-  // a byte-correct PNG signature + IHDR chunk carrying the width/height
-  // our inspectImage() reader actually parses. The rest of the file
-  // (IDAT/IEND) is a fixed minimal valid 1x1 PNG's tail, which is fine
-  // since nothing in this codebase decodes pixel data, only the header.
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  const ihdrData = Buffer.alloc(13);
-  ihdrData.writeUInt32BE(width, 0);
-  ihdrData.writeUInt32BE(height, 4);
-  ihdrData[8] = 8; // bit depth
-  ihdrData[9] = 2; // color type RGB
-  ihdrData[10] = 0;
-  ihdrData[11] = 0;
-  ihdrData[12] = 0;
-  const ihdrLength = Buffer.alloc(4);
-  ihdrLength.writeUInt32BE(13, 0);
-  const ihdrType = Buffer.from("IHDR");
-  const ihdrCrc = Buffer.alloc(4); // CRC not validated by our reader
-  const ihdrChunk = Buffer.concat([ihdrLength, ihdrType, ihdrData, ihdrCrc]);
-
-  // A minimal, real 1x1 IDAT + IEND tail (valid zlib stream for a single
-  // black pixel) — content doesn't need to match the IHDR dimensions for
-  // our header-only inspection, and nothing here re-decodes pixels.
-  const idat = Buffer.from([
-    0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0x60, 0x60, 0x60, 0x00, 0x00, 0x00, 0x04, 0x00,
-    0x01, 0x27, 0xa5, 0x74, 0x08,
-  ]);
-  const iend = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
-
-  return Buffer.concat([signature, ihdrChunk, idat, iend]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type RGB
+  const rowLength = 1 + width * 3; // filter byte + pixels
+  const raw = Buffer.alloc(rowLength * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * rowLength + 1 + x * 3;
+      raw[i] = (x * 255) / Math.max(1, width - 1);
+      raw[i + 1] = (y * 255) / Math.max(1, height - 1);
+      raw[i + 2] = 128;
+    }
+  }
+  return Buffer.concat([signature, pngChunk("IHDR", ihdr), pngChunk("IDAT", deflateSync(raw)), pngChunk("IEND", Buffer.alloc(0))]);
 }
 
 export function makePhotoFormData(buffer: Buffer, filename = "photo.png", type = "image/png"): FormData {

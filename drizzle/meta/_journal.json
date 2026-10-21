@@ -134,6 +134,27 @@
       "when": 1791529413377,
       "tag": "0018_b19_renewal_cycles",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792279801560,
+      "tag": "0019_personal_matchmaking",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792332370715,
+      "tag": "0020_introductions_company_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792575567942,
+      "tag": "0021_matchmaking_invitations",
+      "breakpoints": true
     }
   ]
 }

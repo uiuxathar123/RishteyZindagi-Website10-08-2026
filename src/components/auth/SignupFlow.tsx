@@ -21,9 +21,11 @@ import type { OtpChallenge, RegisterResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { Check, PartyPopper } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { FieldError, FormAlert } from "./FormAlert";
 import { OtpChallengePanel, messageOf } from "./OtpChallengePanel";
+import { safeNext } from "./safeNext";
 
 const STEPS = ["Basic Details", "Verify OTP", "Set Password", "Done"] as const;
 
@@ -72,6 +74,8 @@ function maxDob(): string {
 }
 
 export function SignupFlow() {
+  // Where to return after signup (e.g. the homepage search with its filters); only safe local paths are kept.
+  const next = safeNext(useSearchParams().get("next"), "");
   const [step, setStep] = useState(0);
   const [d, setD] = useState<Details>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
@@ -397,7 +401,7 @@ export function SignupFlow() {
                 Privacy Policy
               </Link>
               . Already registered?{" "}
-              <Link href="/login" className="rz-focus font-semibold text-rz-maroon">
+              <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="rz-focus font-semibold text-rz-maroon">
                 Log in
               </Link>
             </p>
@@ -497,7 +501,17 @@ export function SignupFlow() {
             <div className="mt-2 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
               {/* Hard navigation: the session cookie was just set, so no cached
                   (signed-out) router state may be reused. */}
-              <Button size="lg" disabled={profileStatus === "working"} onClick={() => window.location.assign("/dashboard/profile")}>
+              {next && (
+                <Button size="lg" disabled={profileStatus === "working"} onClick={() => window.location.assign(next)}>
+                  {next.startsWith("/search") ? "Continue to Your Search" : "Continue"}
+                </Button>
+              )}
+              <Button
+                size="lg"
+                variant={next ? "outline" : "primary"}
+                disabled={profileStatus === "working"}
+                onClick={() => window.location.assign("/dashboard/profile")}
+              >
                 Complete My Profile
               </Button>
               <Button variant="outline" size="lg" onClick={() => window.location.assign("/dashboard")}>

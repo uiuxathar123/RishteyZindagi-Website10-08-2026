@@ -72,6 +72,26 @@ export function PaymentReturnClient({ paymentId }: { paymentId: string }) {
 
   const { payment } = state.result;
   const amount = formatMoney(payment.amountInPaise, payment.currency);
+  if (payment.status === "SUCCESS" && payment.matchmakingCaseId) {
+    return (
+      <Panel icon={<CheckCircle2 className="h-7 w-7 text-rz-success" />} title="Payment successful">
+        <p>We received {amount}. Your Personal Matchmaking has started and your invoice is in My membership.</p>
+        <ButtonLink href="/dashboard/matchmaking" className="mt-5">
+          Open Personal Matchmaking
+        </ButtonLink>
+      </Panel>
+    );
+  }
+  if (payment.status === "FAILED" && payment.matchmakingCaseId) {
+    return (
+      <Panel icon={<XCircle className="h-7 w-7 text-rz-danger" />} title="Payment failed">
+        <p>The payment was not successful, so Personal Matchmaking has not started.</p>
+        <ButtonLink href="/personal-matchmaking" className="mt-5">
+          Try again
+        </ButtonLink>
+      </Panel>
+    );
+  }
   if (payment.status === "SUCCESS") {
     return (
       <Panel icon={<CheckCircle2 className="h-7 w-7 text-rz-success" />} title="Payment successful">

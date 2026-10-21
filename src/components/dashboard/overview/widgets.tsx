@@ -28,6 +28,7 @@ import type {
 } from "@/lib/api/types";
 import { formatDate, timeAgo } from "@/lib/format";
 import { primaryPhotoUrl, photoSrc } from "@/lib/photo";
+import { defaultAvatarSrc } from "@/lib/avatar/defaultAvatar";
 import { Bell, Heart, ShieldAlert, ShieldCheck, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { ReactNode } from "react";
@@ -244,6 +245,13 @@ export function MembershipCard() {
                 {data.membership?.expiresAt ? `Valid until ${formatDate(data.membership.expiresAt)}` : "Active membership"}
               </p>
             </>
+          ) : data?.includedAccess ? (
+            <>
+              <p className="flex flex-wrap items-center gap-2 font-serif text-base font-semibold text-rz-navy">
+                Member access <Badge tone="success">Active</Badge>
+              </p>
+              <p className="mt-1 text-sm text-rz-muted">Included with Personal Matchmaking until {formatDate(data.includedAccess.until)} — interests and chat are open.</p>
+            </>
           ) : (
             <>
               <p className="font-serif text-base font-semibold text-rz-navy">No active membership</p>
@@ -272,7 +280,7 @@ function CompactProfile({ item }: { item: RecommendationItem }) {
       href={`/dashboard/members/${p.id}`}
       className="rz-focus flex items-center gap-3 rounded-lg border border-rz-border bg-white p-3 transition-colors hover:border-rz-maroon/40"
     >
-      <Avatar src={photo} alt="" size="lg" />
+      <Avatar src={photo} alt="" size="lg" fallbackSrc={defaultAvatarSrc({ gender: p.gender, religion: p.religion, seed: p.id })} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-rz-navy">{p.displayName}</span>
         <span className="block truncate text-xs text-rz-muted">

@@ -6,11 +6,11 @@ import { useMemo, useState } from "react";
 import { ActionError } from "@/components/profile/ActionError";
 import { Pager } from "@/components/profile/Pager";
 import { memberHref } from "@/components/profile/ProfileCard";
-import { locationLine } from "@/components/profile/cardModel";
+import { cardAvatar, locationLine } from "@/components/profile/cardModel";
 import { invalidateRelations } from "@/components/profile/relations";
 import { useProfileSummaries, type Summary } from "@/components/profile/useProfileSummaries";
 import { ApiErrorView } from "@/components/ui/AsyncView";
-import { VerifiedBadge } from "@/components/ui/Badge";
+import { CompanyVerifiedBadge, VerifiedBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { PhotoImage } from "@/components/ui/PhotoImage";
 import { EmptyState, ProfileCardSkeleton } from "@/components/ui/States";
@@ -35,14 +35,15 @@ function ShortlistCard({ entry, summary, onRemoved }: { entry: ShortlistView; su
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-rz-peach">
         {profileId ? (
           <Link href={memberHref(profileId)} aria-label={`View ${name}'s profile`} className="rz-focus absolute inset-0 block">
-            <PhotoImage src={card?.photoSrc} alt={card?.photoSrc ? `Photo of ${name}` : `${name}`} sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw" />
+            <PhotoImage src={card?.photoSrc} alt={card?.photoSrc ? `Photo of ${name}` : `${name}`} sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw" fallbackSrc={card ? cardAvatar(card) : undefined} />
           </Link>
         ) : (
-          <PhotoImage src={card?.photoSrc} alt={name} />
+          <PhotoImage src={card?.photoSrc} alt={name} fallbackSrc={card ? cardAvatar(card) : undefined} />
         )}
-        {card?.verified && (
-          <div className="absolute left-3 top-3">
-            <VerifiedBadge />
+        {(card?.verified || card?.companyVerified) && (
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+            {card?.verified && <VerifiedBadge />}
+            {card?.companyVerified && <CompanyVerifiedBadge />}
           </div>
         )}
       </div>

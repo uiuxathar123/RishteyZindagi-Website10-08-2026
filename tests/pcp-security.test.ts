@@ -91,6 +91,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
   health: "liveness probe",
   "health/ready": "readiness probe",
   "membership-plans": "public pricing",
+  "matchmaking/offer": "Personal Matchmaking: public price and terms (soft-auth, only to pick the member's currency)",
   "reference/profile-options": "public form options",
   "search/profiles": "public search preview (B4 design)",
   "search/access": "B18 UI hint for the same public search (soft-auth; the search route enforces the rule itself)",

@@ -1,22 +1,16 @@
 "use client";
 
-import { Calendar, Globe2, Heart, Languages, Search, SlidersHorizontal, User } from "lucide-react";
+import { Calendar, Globe2, Heart, Languages, LockKeyhole, Search, SlidersHorizontal, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./Hero.module.css";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { FieldLabel, Select } from "@/components/ui/Input";
 import { useReference } from "@/lib/api/lookups";
 import type { LookupRow } from "@/lib/api/types";
 import { HOME_REFERENCE_QUERY } from "./browseLookups";
-
-const AGE_BANDS = [
-  { value: "21-25", label: "21 – 25", min: 21, max: 25 },
-  { value: "26-30", label: "26 – 30", min: 26, max: 30 },
-  { value: "31-35", label: "31 – 35", min: 31, max: 35 },
-  { value: "36-100", label: "36+", min: 36, max: 100 },
-];
+import { AGE_BANDS, authHref, buildSearchHref, checkSession, createHeroSearchSubmitter, type HeroSearchStatus } from "./heroSearch";
 
 function Options({ rows, loading }: { rows?: LookupRow[]; loading: boolean }) {
   if (!rows) return loading ? <option value="" disabled>Loading…</option> : null;
@@ -35,7 +29,9 @@ function Options({ rows, loading }: { rows?: LookupRow[]; loading: boolean }) {
  * The hero search form. Religion, country and mother-tongue options are the
  * backend's own reference rows, and submitting opens /search with the same
  * query parameters GET /search/profiles takes (so the results page, the URL
- * and the API all agree). Every field is optional.
+ * and the API all agree). Every field is optional. Searching needs an
+ * account: a signed-out visitor is offered log in / create account, and the
+ * chosen filters come back with them through `?next=` (see heroSearch.ts).
  */
 export function HeroSearchForm() {
   const router = useRouter();
@@ -47,20 +43,21 @@ export function HeroSearchForm() {
   const [countryId, setCountryId] = useState("");
   const [tongueId, setTongueId] = useState("");
 
+  const [status, setStatus] = useState<HeroSearchStatus>("idle");
+  const promptRef = useRef<HTMLHeadingElement>(null);
+  const searchHref = buildSearchHref({ gender, age, religionId, countryId, tongueId });
+  const submitSearch = useMemo(
+    () => createHeroSearchSubmitter({ check: () => checkSession(), navigate: (href) => router.push(href), setStatus }),
+    [router]
+  );
+
+  useEffect(() => {
+    if (status === "needs-auth") promptRef.current?.focus();
+  }, [status]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
-    const q = new URLSearchParams();
-    if (gender) q.set("gender", gender);
-    const band = AGE_BANDS.find((b) => b.value === age);
-    if (band) {
-      q.set("minAge", String(band.min));
-      q.set("maxAge", String(band.max));
-    }
-    if (religionId) q.set("religionIds", religionId);
-    if (countryId) q.set("countryId", countryId);
-    if (tongueId) q.set("motherTongueIds", tongueId);
-    const s = q.toString();
-    router.push(s ? `/search?${s}` : "/search");
+    void submitSearch(searchHref);
   }
 
   return (
@@ -113,8 +110,31 @@ export function HeroSearchForm() {
         </p>
       )}
 
-      <Button type="submit" fullWidth icon={<Search className="h-4 w-4" />}>
-        Search Profiles
+      {status === "needs-auth" && (
+        <div role="region" aria-labelledby="rz-search-login-title" className="mb-3 rounded-lg border border-rz-border bg-rz-cream p-4 text-left">
+          <h2 id="rz-search-login-title" ref={promptRef} tabIndex={-1} className="flex items-center gap-2 font-serif text-base font-semibold text-rz-navy outline-none">
+            <LockKeyhole className="h-4 w-4 text-rz-maroon" aria-hidden />
+            Log in to see matching profiles
+          </h2>
+          <p className="mt-1 text-[13px] text-rz-muted">Create a free account or log in. We&apos;ll keep the filters you chose.</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <ButtonLink href={authHref("login", searchHref)} size="sm" fullWidth>
+              Log in
+            </ButtonLink>
+            <ButtonLink href={authHref("signup", searchHref)} variant="outline" size="sm" fullWidth>
+              Create account
+            </ButtonLink>
+          </div>
+        </div>
+      )}
+      {status === "error" && (
+        <p role="alert" className="mb-3 text-xs text-rz-danger">
+          We couldn&apos;t check whether you&apos;re signed in. Please try again.
+        </p>
+      )}
+
+      <Button type="submit" fullWidth icon={<Search className="h-4 w-4" />} disabled={status === "checking"} aria-busy={status === "checking"}>
+        {status === "checking" ? "Checking…" : "Search Profiles"}
       </Button>
       <Link href="/search" className="rz-focus mt-3.5 flex w-full items-center justify-center gap-1.5 py-1.5 text-[13.5px] font-semibold text-rz-muted hover:text-rz-maroon">
         <SlidersHorizontal className="h-3.5 w-3.5" />

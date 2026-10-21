@@ -26,6 +26,16 @@ export function requireAdminRole(ctx: AuthContext, allowed: string[]): void {
   }
 }
 
+/**
+ * Super-Admin-only areas that must never be delegated (Personal Matchmaking). Decided by the role NAME, not by a
+ * permission — a permission can be granted to STAFF_ADMIN through role_permissions — and, like requirePermission,
+ * an account still on a one-time temporary password is refused until it sets its own.
+ */
+export function requireSuperAdmin(ctx: AuthContext): void {
+  requireAdminRole(ctx, ["SUPER_ADMIN"]);
+  if (ctx.mustChangePassword) throw new AuthorizationError("You must change your temporary password before using the admin panel.");
+}
+
 export async function requirePermission(ctx: AuthContext, permissionKey: string): Promise<void> {
   if (ctx.subject.type !== "admin" || !ctx.adminRoleName) throw new AuthorizationError();
   // PCP: a staff account on a one-time temporary password must set its own password first.

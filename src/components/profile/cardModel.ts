@@ -5,6 +5,7 @@
  * absent field stays absent so the UI can simply not show it.
  */
 import { photoSrc, primaryPhotoUrl } from "@/lib/photo";
+import { defaultAvatarSrc } from "@/lib/avatar/defaultAvatar";
 import type {
   CompatibilityBreakdownRow,
   GatedProfile,
@@ -36,6 +37,8 @@ export interface CardProfile {
   incomeRange?: string | null;
   aboutMe?: string | null;
   verified: boolean;
+  /** "Company Verified" — shown only when the API says the team's review was approved. */
+  companyVerified: boolean;
   /** Proxied (`/bff/...`) src of the primary photo, if the API gave one. */
   photoSrc?: string;
   /** All photos (proxied), primary first. */
@@ -74,6 +77,7 @@ function fromMember(p: MemberProfile): CardProfile {
     incomeRange: p.incomeRange,
     aboutMe: p.aboutMe,
     verified: p.verificationStatus === "VERIFIED",
+    companyVerified: p.companyVerified === true,
     photoSrc: photoSrc(primaryPhotoUrl(p.photos)),
     photos: sorted.map((ph) => ({ id: ph.id, src: photoSrc(ph.url) as string, isPrimary: ph.isPrimary })),
     photosRestricted: p.photosRestricted === true,
@@ -92,6 +96,7 @@ function fromGated(p: GatedProfile): CardProfile {
     education: p.education,
     profession: p.profession,
     verified: p.verificationStatus === "VERIFIED",
+    companyVerified: p.companyVerified === true,
     photos: [],
     photoWithheld: p.photoBlurred,
   };
@@ -115,6 +120,11 @@ export function fromProfileView(view: ProfileViewResponse): CardProfile | null {
   if (view.audience === "authenticated") return fromMember(view.profile);
   if (view.audience === "anonymous") return fromGated(view.profile);
   return null;
+}
+
+/** The member's default avatar (gender + religion), shown when there is no photo; undefined for the anonymous view. */
+export function cardAvatar(p: Pick<CardProfile, "gender" | "religion" | "profileId">): string | undefined {
+  return defaultAvatarSrc({ gender: p.gender, religion: p.religion, seed: p.profileId });
 }
 
 export function locationLine(p: Pick<CardProfile, "city" | "country">): string {

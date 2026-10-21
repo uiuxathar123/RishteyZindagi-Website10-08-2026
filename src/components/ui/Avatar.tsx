@@ -17,9 +17,12 @@ export function Avatar({
   alt,
   size = "md",
   className,
+  fallbackSrc,
 }: {
   src?: string;
   alt: string;
+  /** Shown instead of the heart when there is no photo (or it fails to load), e.g. the default avatar. */
+  fallbackSrc?: string;
   size?: keyof typeof sizeMap;
   className?: string;
 }) {
@@ -47,6 +50,8 @@ export function Avatar({
           onError={() => setFailed(true)}
           className="object-cover"
         />
+      ) : fallbackSrc ? (
+        <Image src={fallbackSrc} alt={alt} fill sizes="96px" unoptimized className="object-cover" />
       ) : (
         <Heart className="h-1/2 w-1/2" strokeWidth={1.6} />
       )}

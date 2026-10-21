@@ -12,6 +12,7 @@ export type InvoiceRow = InvoiceSummary & { detail: InvoiceDetail | null };
 
 interface Snapshot {
   membership?: { planName?: string };
+  service?: { name?: string };
   amountTax?: { currency?: string; taxAmountInSmallestUnit?: number; taxRatePercent?: number };
 }
 
@@ -36,7 +37,7 @@ export function InvoicesSection({ state }: { state: AsyncState<InvoiceRow[]> }) 
                   <p className="text-xs text-rz-muted">
                     {[
                       formatDate(inv.issuedAt),
-                      (inv.detail?.snapshot as Snapshot | undefined)?.membership?.planName,
+                      (inv.detail?.snapshot as Snapshot | undefined)?.membership?.planName ?? (inv.detail?.snapshot as Snapshot | undefined)?.service?.name,
                       currencyOf(inv) ? `Total ${formatMoney(inv.amountInPaise, currencyOf(inv)!)}${taxNote(inv)}` : null,
                     ]
                       .filter(Boolean)

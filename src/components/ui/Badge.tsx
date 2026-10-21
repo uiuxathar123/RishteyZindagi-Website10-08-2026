@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ShieldCheck } from "lucide-react";
+import { BadgeCheck, ShieldCheck } from "lucide-react";
 import { ReactNode } from "react";
 
 type Tone = "navy" | "maroon" | "gold" | "success" | "neutral";
@@ -37,6 +37,26 @@ export function Badge({
 /** The small "Verified" checkmark badge used on profile photos and cards
  * throughout the product — kept as one component so the mark stays
  * pixel-identical everywhere it appears. */
+/** Exact label required by the product: "Company Verified". The tooltip states what it does NOT mean. */
+export const COMPANY_VERIFIED_TOOLTIP =
+  "Company Verified: this profile was reviewed and approved by the RishteyZindagi team. It is not a guarantee of compatibility, character or a successful marriage.";
+
+export function CompanyVerifiedBadge({ className }: { className?: string }) {
+  return (
+    <span
+      title={COMPANY_VERIFIED_TOOLTIP}
+      aria-label={COMPANY_VERIFIED_TOOLTIP}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full bg-rz-navy px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm",
+        className
+      )}
+    >
+      <BadgeCheck className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+      <span aria-hidden>Company Verified</span>
+    </span>
+  );
+}
+
 export function VerifiedBadge({ className }: { className?: string }) {
   return (
     <span

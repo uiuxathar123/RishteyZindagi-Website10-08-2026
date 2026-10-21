@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   Bell,
   Heart,
+  HeartHandshake,
   LayoutGrid,
   LogOut,
   Menu,
@@ -70,6 +71,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/groups", label: "Groups", icon: MessagesSquare },
   { href: "/dashboard/notifications", label: "Notifications", icon: Bell },
   { href: "/dashboard/membership", label: "Membership", icon: Users },
+  { href: "/dashboard/matchmaking", label: "Personal Matchmaking", icon: HeartHandshake },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;
 

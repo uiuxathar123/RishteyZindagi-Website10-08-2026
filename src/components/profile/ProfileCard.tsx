@@ -5,9 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MatchScore, BreakdownRows } from "./MatchScore";
 import { ActionError } from "./ActionError";
-import { locationLine, type CardProfile } from "./cardModel";
+import { locationLine, type CardProfile, cardAvatar } from "./cardModel";
 import { useProfileActions } from "./useProfileActions";
-import { Badge, VerifiedBadge } from "@/components/ui/Badge";
+import { Badge, CompanyVerifiedBadge, VerifiedBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { PhotoImage } from "@/components/ui/PhotoImage";
 import { formatHeight } from "@/lib/format";
@@ -43,9 +43,10 @@ function GatedCard({ profile, loginNext }: { profile: CardProfile; loginNext?: s
         <p className="px-4 text-xs font-medium text-rz-navy/80">
           {profile.photoWithheld ? "Photo visible after you log in" : "No photo added yet"}
         </p>
-        {profile.verified && (
-          <div className="absolute left-3 top-3">
-            <VerifiedBadge />
+        {(profile.verified || profile.companyVerified) && (
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+            {profile.verified && <VerifiedBadge />}
+            {profile.companyVerified && <CompanyVerifiedBadge />}
           </div>
         )}
       </div>
@@ -124,6 +125,7 @@ function MemberCard({ profile }: { profile: CardProfile }) {
           <PhotoImage
             src={profile.photoSrc}
             alt={profile.photoSrc ? `Photo of ${profile.displayName}` : `${profile.displayName} has not added a photo`}
+            fallbackSrc={cardAvatar(profile)}
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 45vw, 90vw"
             className="transition-transform duration-300 group-hover:scale-[1.03]"
           />
@@ -140,9 +142,10 @@ function MemberCard({ profile }: { profile: CardProfile }) {
             </div>
           </div>
         )}
-        {profile.verified && (
-          <div className="absolute left-3 top-3">
-            <VerifiedBadge />
+        {(profile.verified || profile.companyVerified) && (
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+            {profile.verified && <VerifiedBadge />}
+            {profile.companyVerified && <CompanyVerifiedBadge />}
           </div>
         )}
         {profile.userId && (

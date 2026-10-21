@@ -15,6 +15,9 @@ import { and, count, desc, eq, gt } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { payments, transactions } from "@/server/db/schema";
 
+/** The shared client, or a transaction from db.transaction(...), so a caller can create rows inside its own transaction. */
+export type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export type PaymentRow = typeof payments.$inferSelect;
 export type TransactionRow = typeof transactions.$inferSelect;
 export type PaymentStatus = PaymentRow["status"];
@@ -23,20 +26,23 @@ export function generateInternalTransactionRef(): string {
   return `TXN-${randomUUID()}`;
 }
 
-export interface CreatePaymentInput {
+/** A payment is for exactly one purchase: a membership, or a Personal Matchmaking case (DB check constraint too). */
+export type PaymentPurpose = { membershipId: string; matchmakingCaseId?: undefined } | { matchmakingCaseId: string; membershipId?: undefined };
+
+export type CreatePaymentInput = PaymentPurpose & {
   userId: string;
-  membershipId: string;
   gatewayId: string;
   amountInPaise: number;
   currency: string;
-}
+};
 
-export async function createPayment(input: CreatePaymentInput): Promise<PaymentRow> {
-  const [row] = await db
+export async function createPayment(input: CreatePaymentInput, exec: DbExecutor = db): Promise<PaymentRow> {
+  const [row] = await exec
     .insert(payments)
     .values({
       userId: input.userId,
-      membershipId: input.membershipId,
+      membershipId: input.membershipId ?? null,
+      matchmakingCaseId: input.matchmakingCaseId ?? null,
       gatewayId: input.gatewayId,
       amountInPaise: input.amountInPaise,
       currency: input.currency,
@@ -154,8 +160,8 @@ export interface CreateTransactionInput {
   amountInPaise: number;
 }
 
-export async function createTransaction(input: CreateTransactionInput): Promise<TransactionRow> {
-  const [row] = await db
+export async function createTransaction(input: CreateTransactionInput, exec: DbExecutor = db): Promise<TransactionRow> {
+  const [row] = await exec
     .insert(transactions)
     .values({ paymentId: input.paymentId, transactionRef: input.transactionRef, amountInPaise: input.amountInPaise, status: "PENDING" })
     .returning();

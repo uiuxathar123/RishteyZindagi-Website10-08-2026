@@ -9,6 +9,9 @@ import type { ProfileRow, ProfilePhotoRow } from "./profiles.repository";
 import type { LookupRow } from "./reference.repository";
 import { computeAge, computeCompletion, type ProfileStatus } from "./completion";
 
+/** "Company Verified" (a Super Admin review, see matchmaking/company-verification.service.ts): only APPROVED counts. */
+const companyVerified = (profile: ProfileRow): boolean => profile.companyVerificationStatus === "APPROVED";
+
 export interface ResolvedLookups {
   maritalStatus: LookupRow | null;
   religion: LookupRow | null;
@@ -90,6 +93,7 @@ export interface OwnerProfileView {
   familyDetails: unknown;
   verificationStatus: string;
   verifiedAt: string | null;
+  companyVerified: boolean;
   profileCompletionPercent: number;
   missingRequiredFields: string[];
   profileStatus: ProfileStatus;
@@ -144,6 +148,7 @@ export function toOwnerProfileView(
     familyDetails: profile.familyDetails ?? null,
     verificationStatus: profile.verificationStatus,
     verifiedAt: profile.verifiedAt ? profile.verifiedAt.toISOString() : null,
+    companyVerified: companyVerified(profile),
     profileCompletionPercent: completion.profileCompletionPercent,
     missingRequiredFields: completion.missingRequiredFields,
     profileStatus: completion.profileStatus,
@@ -188,6 +193,7 @@ export interface AuthenticatedPublicProfileView {
   city: string | null;
   aboutMe: string | null;
   verificationStatus: string;
+  companyVerified: boolean;
   photos: AuthenticatedPublicPhotoView[];
   /** B18: true when the owner limited photos to accepted connections and the viewer is not one. */
   photosRestricted: boolean;
@@ -225,6 +231,7 @@ export function toAuthenticatedPublicView(
     city: lookups.city?.name ?? null,
     aboutMe: profile.aboutMe,
     verificationStatus: profile.verificationStatus,
+    companyVerified: companyVerified(profile),
     photos: photosRestricted ? [] : photos.map((p) => ({ id: p.id, url: gatedPhotoUrl(p.id), isPrimary: p.isPrimary })),
     photosRestricted,
     lastActive: profile.showLastActive ? extras?.lastActive ?? null : null,
@@ -240,6 +247,7 @@ export interface AnonymousGatedProfileView {
   education: string | null;
   profession: string | null;
   verificationStatus: string;
+  companyVerified: boolean;
   photoBlurred: boolean;
 }
 
@@ -261,6 +269,7 @@ export function toAnonymousGatedView(
     education: lookups.education?.name ?? null,
     profession: lookups.profession?.name ?? null,
     verificationStatus: profile.verificationStatus,
+    companyVerified: companyVerified(profile),
     photoBlurred: hasPhoto,
   };
 }

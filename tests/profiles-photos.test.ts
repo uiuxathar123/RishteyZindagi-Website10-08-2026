@@ -44,7 +44,7 @@ describe("Profile photos", () => {
     const { data } = await res.json();
     expect(data.photo.isPrimary).toBe(true);
     expect(data.photo.sortOrder).toBe(0);
-    expect(data.photo.mimeType).toBe("image/png");
+    expect(data.photo.mimeType).toBe("image/webp"); // uploads are re-encoded as WebP
     expect(data.photo.width).toBe(300);
     expect(data.photo.url).toBe(`/api/v1/profiles/photos/${data.photo.id}/file`);
   });

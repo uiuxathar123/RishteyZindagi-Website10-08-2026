@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
  * cookie-protected, so they bypass the Next image optimiser (`unoptimized`)
  * and fall back to a neutral placeholder if the file can't be loaded
  * (missing, not yet visible, blocked, or session ended) — never a broken-image icon.
+ * `fallbackSrc` (e.g. the member's default avatar, see lib/avatar) replaces that placeholder when given.
  */
 export function PhotoImage({
   src,
@@ -17,9 +18,11 @@ export function PhotoImage({
   className,
   sizes = "(min-width: 1024px) 25vw, 50vw",
   priority,
+  fallbackSrc,
 }: {
   src?: string;
   alt: string;
+  fallbackSrc?: string;
   className?: string;
   sizes?: string;
   priority?: boolean;
@@ -27,6 +30,9 @@ export function PhotoImage({
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
 
+  if ((!src || failed) && fallbackSrc) {
+    return <Image src={fallbackSrc} alt={alt} fill sizes={sizes} unoptimized className={cn("object-cover", className)} />;
+  }
   if (!src || failed) {
     return (
       <div className={cn("flex h-full w-full items-center justify-center bg-rz-peach text-rz-maroon/60", className)} role="img" aria-label={alt}>

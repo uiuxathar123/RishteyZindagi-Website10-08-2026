@@ -16,6 +16,7 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { ActionError, Card, fieldIssue, KeyValue, Modal, NotAvailable, PageHeader, Pagination, ShortId, SuccessNote, td, th, useDebounced } from "./AdminUi";
 import type { AdminUserDetailFull, AdminWarningCategory } from "./adminTypes";
 import { ModerationPanel } from "./ModerationPanel";
+import { UserProfileDetails } from "./UserProfileDetails";
 import { VerifyControls } from "./VerifyControls";
 
 type Tone = "success" | "gold" | "maroon" | "neutral" | "navy";
@@ -228,6 +229,15 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string; onClose: (
         {({ user }) => {
           return (
             <div className="space-y-6">
+              {user.profile && (
+                <section aria-labelledby="u-full-profile">
+                  <h3 id="u-full-profile" className="mb-3 font-serif text-base font-semibold text-rz-navy">
+                    Profile
+                  </h3>
+                  <UserProfileDetails profileId={user.profile.id} />
+                </section>
+              )}
+
               <section aria-labelledby="u-account">
                 <h3 id="u-account" className="mb-3 font-serif text-base font-semibold text-rz-navy">
                   Account

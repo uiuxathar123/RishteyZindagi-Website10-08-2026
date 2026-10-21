@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionError } from "@/components/profile/ActionError";
 import { memberHref } from "@/components/profile/ProfileCard";
-import { locationLine } from "@/components/profile/cardModel";
+import { cardAvatar, locationLine } from "@/components/profile/cardModel";
 import { useProfileSummaries, type Summary } from "@/components/profile/useProfileSummaries";
 import { ApiErrorView } from "@/components/ui/AsyncView";
 import { Avatar } from "@/components/ui/Avatar";
@@ -223,7 +223,7 @@ function Thread({
         <button type="button" aria-label="Back to conversations" onClick={onBack} className="rz-focus flex h-9 w-9 items-center justify-center rounded-full text-rz-navy lg:hidden">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <Avatar src={card?.photoSrc} alt={name} size="sm" />
+        <Avatar src={card?.photoSrc} alt={name} size="sm" fallbackSrc={card ? cardAvatar(card) : undefined} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-serif text-sm font-semibold text-rz-navy">{name}</p>
           <p className="truncate text-xs text-rz-muted">{card ? locationLine(card) : " "}</p>
@@ -394,7 +394,7 @@ export function MessagesView() {
                     aria-current={selectedId === c.id ? "true" : undefined}
                     className={cn("rz-focus flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-rz-cream/60", selectedId === c.id && "bg-rz-cream/70")}
                   >
-                    <Avatar src={card?.photoSrc} alt={name} size="md" />
+                    <Avatar src={card?.photoSrc} alt={name} size="md" fallbackSrc={card ? cardAvatar(card) : undefined} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
                         <span className="truncate font-serif text-sm font-semibold text-rz-navy">{name}</span>
@@ -421,7 +421,7 @@ export function MessagesView() {
                   const name = card?.displayName ?? m.counterpart.name ?? "Member";
                   return (
                     <li key={m.id} className="flex items-center gap-3 px-4 py-3">
-                      <Avatar src={card?.photoSrc} alt={name} size="md" />
+                      <Avatar src={card?.photoSrc} alt={name} size="md" fallbackSrc={card ? cardAvatar(card) : undefined} />
                       <span className="min-w-0 flex-1 truncate font-serif text-sm font-semibold text-rz-navy">{name}</span>
                       <Button type="button" size="sm" variant="outline" disabled={opening === m.counterpart.userId} onClick={() => void openWith(m.counterpart.userId)}>
                         {opening === m.counterpart.userId ? "Opening…" : "Chat"}

@@ -1,5 +1,6 @@
 "use client";
 
+import { defaultAvatarSrc } from "@/lib/avatar/defaultAvatar";
 import { AsyncView } from "@/components/ui/AsyncView";
 import { Skeleton } from "@/components/ui/States";
 import { Tabs } from "@/components/ui/Tabs";
@@ -104,7 +105,14 @@ export function ProfileEditor() {
                         <FamilySection profile={profile} onSaved={onSaved} />
                       </>
                     )}
-                    {panel("photos", <PhotoManager photos={profile.photos} onChanged={load.reload} />)}
+                    {panel(
+                      "photos",
+                      <PhotoManager
+                        photos={profile.photos}
+                        onChanged={load.reload}
+                        defaultAvatar={defaultAvatarSrc({ gender: profile.gender, religion: profile.religion?.name, seed: profile.id })}
+                      />
+                    )}
                     {panel("preferences", <PartnerPreferencesPanel reference={ref} />)}
                   </>
                 )}

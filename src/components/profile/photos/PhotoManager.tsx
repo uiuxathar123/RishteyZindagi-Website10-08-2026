@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { PhotoImage } from "@/components/ui/PhotoImage";
 import { api } from "@/lib/api/client";
@@ -47,7 +48,16 @@ async function courtesyCheck(file: File): Promise<string | null> {
   return null;
 }
 
-export function PhotoManager({ photos: initial, onChanged: onChangedProp }: { photos: OwnerPhoto[]; onChanged: () => void }) {
+export function PhotoManager({
+  photos: initial,
+  onChanged: onChangedProp,
+  defaultAvatar,
+}: {
+  photos: OwnerPhoto[];
+  onChanged: () => void;
+  /** The member's default avatar (shown wherever they have no photo), previewed in the empty state. */
+  defaultAvatar?: string;
+}) {
   // Also tells the dashboard header to refresh its avatar.
   const onChanged = () => {
     onChangedProp();
@@ -164,8 +174,18 @@ export function PhotoManager({ photos: initial, onChanged: onChangedProp }: { ph
 
       {photos.length === 0 && uploads.length === 0 && (
         <div className="mt-4 rounded-lg border border-dashed border-rz-border bg-rz-ivory px-6 py-10 text-center">
+          {defaultAvatar && (
+            <span className="relative mx-auto mb-3 block h-24 w-24 overflow-hidden rounded-full border border-rz-border bg-white">
+              <Image src={defaultAvatar} alt="Your default avatar" fill sizes="96px" unoptimized className="object-cover" />
+            </span>
+          )}
           <p className="font-serif text-lg font-semibold text-rz-navy">No photos yet</p>
           <p className="mx-auto mt-1 max-w-sm text-sm text-rz-muted">A clear, recent photo of your face makes your profile far more likely to be noticed.</p>
+          {defaultAvatar && (
+            <p className="mx-auto mt-2 max-w-sm text-[13px] text-rz-muted">
+              Until then, this avatar is shown in place of your photo. Your profile appears in search and recommendations once you add a real photo.
+            </p>
+          )}
           <Button type="button" className="mt-4" icon={<Plus className="h-4 w-4" />} onClick={() => inputRef.current?.click()}>
             Add your first photo
           </Button>

@@ -6,10 +6,10 @@ import { useState } from "react";
 import { BlockPanel, ReportPanel } from "./SafetyPanels";
 import { ActionError } from "@/components/profile/ActionError";
 import { InterestControl } from "@/components/profile/ProfileCard";
-import { fromProfileView, locationLine, type CardProfile } from "@/components/profile/cardModel";
+import { cardAvatar, fromProfileView, locationLine, type CardProfile } from "@/components/profile/cardModel";
 import { useProfileActions } from "@/components/profile/useProfileActions";
 import { ApiErrorView } from "@/components/ui/AsyncView";
-import { VerifiedBadge } from "@/components/ui/Badge";
+import { CompanyVerifiedBadge, VerifiedBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { PhotoImage } from "@/components/ui/PhotoImage";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
@@ -47,12 +47,14 @@ function Gallery({ card }: { card: CardProfile }) {
         <PhotoImage
           src={current?.src}
           alt={current ? `Photo ${index + 1} of ${card.displayName}` : `${card.displayName} has not added a photo yet`}
+          fallbackSrc={cardAvatar(card)}
           sizes="(min-width: 1024px) 380px, 90vw"
           priority
         />
-        {card.verified && (
-          <div className="absolute left-3 top-3">
-            <VerifiedBadge />
+        {(card.verified || card.companyVerified) && (
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+            {card.verified && <VerifiedBadge />}
+            {card.companyVerified && <CompanyVerifiedBadge />}
           </div>
         )}
       </div>

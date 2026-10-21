@@ -9,7 +9,7 @@
  * §1) is fetched in the same query via a LEFT JOIN — no second,
  * per-candidate query, so there is no N+1 here.
  */
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { profiles, users, partnerPreferences, blocks } from "@/server/db/schema";
 import type { ProfileRow } from "@/server/modules/profiles/profiles.repository";
@@ -51,6 +51,11 @@ export interface HardFilterInput {
    * this repository function stays a pure "apply these conditions" query
    * builder, matching search.repository.ts's own separation of concerns. */
   requesterEffectiveGenderPreference: "MALE" | "FEMALE";
+  /** Personal Matchmaking: also exclude members who opted out of being suggested by the matchmaking team. */
+  excludeMatchmakingOptOut?: boolean;
+  /** Restrict the (otherwise identical) eligibility check to these candidate user ids — used to re-check a
+   * manually chosen or previously suggested profile against exactly the same rules. An empty list matches nobody. */
+  onlyUserIds?: string[];
 }
 
 /**
@@ -69,6 +74,7 @@ export interface HardFilterInput {
  *      candidate follow-up query is needed.
  */
 export async function fetchEligibleCandidates(input: HardFilterInput): Promise<CandidateRow[]> {
+  if (input.onlyUserIds && input.onlyUserIds.length === 0) return [];
   // The CASE branches must be explicitly cast to the profile_gender enum
   // type — otherwise Postgres treats the 'FEMALE'/'MALE' literals as text
   // and COALESCE(enum, text) is rejected ("COALESCE types profile_gender
@@ -97,7 +103,9 @@ export async function fetchEligibleCandidates(input: HardFilterInput): Promise<C
         ne(profiles.userId, input.requesterUserId),
         eq(profiles.gender, input.requesterEffectiveGenderPreference),
         sql`${candidateEffectiveGenderPref} = ${input.requesterGender}`,
-        notBlocked
+        notBlocked,
+        input.excludeMatchmakingOptOut ? eq(profiles.matchmakingOptOut, false) : undefined,
+        input.onlyUserIds ? inArray(profiles.userId, input.onlyUserIds) : undefined
       )
     )
     .orderBy(asc(profiles.id))
