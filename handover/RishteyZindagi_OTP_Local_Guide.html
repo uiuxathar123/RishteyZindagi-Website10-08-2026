@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="hi-Latn">
+<head>
+<meta charset="utf-8">
+<title>RishteyZindagi — OTP Local Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --maroon:#A51E3B; --navy:#1C2D4F; --gold:#C99A45; --champ:#F4E5C4; --muted:#5d6475; --line:#e3dccd; --ok:#1e7a4f; }
+  body { font-family:"Segoe UI",Arial,sans-serif; color:#222; font-size:10.8pt; line-height:1.55; margin:0; }
+  .head { background:var(--navy); color:#fff; padding:14pt 16pt; border-radius:8pt; border-bottom:6pt solid var(--gold); }
+  .head h1 { font-family:Georgia,serif; margin:0; font-size:20pt; }
+  .head p { margin:3pt 0 0; opacity:.9; }
+  h2 { font-family:Georgia,serif; color:var(--maroon); font-size:14.5pt; margin:16pt 0 6pt; padding-bottom:3pt; border-bottom:2px solid var(--champ); }
+  h3 { color:var(--navy); font-size:11.5pt; margin:12pt 0 4pt; }
+  table { width:100%; border-collapse:collapse; margin:6pt 0 10pt; font-size:10pt; page-break-inside:avoid; }
+  th { background:var(--champ); color:var(--navy); text-align:left; padding:5pt 6pt; border:1px solid var(--line); }
+  td { padding:5pt 6pt; border:1px solid var(--line); vertical-align:top; }
+  .mono { font-family:Consolas,"Courier New",monospace; font-size:9.4pt; background:#f4f1ea; padding:0 3pt; border-radius:3pt; }
+  pre { font-family:Consolas,"Courier New",monospace; font-size:9.4pt; background:#1f2533; color:#f1f1f1; padding:8pt 10pt; border-radius:5pt; white-space:pre-wrap; margin:5pt 0 9pt; page-break-inside:avoid; }
+  pre .c { color:#9fb3c8; }
+  .box { border-radius:6pt; padding:8pt 11pt; margin:8pt 0; page-break-inside:avoid; }
+  .warn { background:#fff4dc; border-left:5px solid var(--gold); }
+  .danger { background:#fdecef; border-left:5px solid var(--maroon); }
+  .good { background:#e8f5ee; border-left:5px solid var(--ok); }
+  .info { background:#eef2f8; border-left:5px solid var(--navy); }
+  ol li, ul li { margin:0 0 5pt; }
+  .fig { text-align:center; margin:6pt 0; page-break-inside:avoid; }
+  .small { font-size:9pt; color:var(--muted); }
+  .brk { page-break-before:always; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>OTP — Local mein bypass: kyun aur kaise</h1>
+  <p>RishteyZindagi.com · Developer guide · 22 October 2026</p>
+</div>
+
+<h2>1. OTP kya hai aur website mein kahan aata hai?</h2>
+<p>OTP (One-Time Password) ek 6-digit code hai jo member ke e-mail ya mobile par bheja jaata hai, taaki pakka ho sake ki e-mail/mobile sach mein usi ka hai. Website mein OTP in jagah aata hai:</p>
+<table>
+  <tr><th style="width:42%">Jagah</th><th style="width:22%">Local mein band ho sakta hai?</th><th>Note</th></tr>
+  <tr><td>Naya account banana (Signup verification)</td><td><b>Haan</b></td><td>Setting: "Registration OTP verification"</td></tr>
+  <tr><td>Naye device / browser se login</td><td><b>Haan</b> (alag setting)</td><td>Sirf <span class="mono">--all</span> ke saath ya admin panel se</td></tr>
+  <tr><td>Password reset, account recovery</td><td>Nahi</td><td>Hamesha code chahiye</td></tr>
+  <tr><td>Admin login / MFA, contact (e-mail/mobile) change</td><td>Nahi</td><td>Hamesha code chahiye</td></tr>
+</table>
+
+<h2>2. Local mein OTP bypass kyun karte hain?</h2>
+<ol>
+  <li><b>OTP bhejne ke liye asli vendor chahiye.</b> E-mail ke liye SMTP account (jaise Gmail/Zoho/SES), SMS ke liye Fast2SMS ki paid API key. Developer ke computer par yeh accounts aur keys nahi hote.</li>
+  <li><b>Bina vendor ke code kabhi pahunchega hi nahi.</b> Signup form "Email OTP delivery is not configured" dikhayega aur account nahi banega. Phir aap profile, search, interest, chat, payment kuch bhi test nahi kar paoge.</li>
+  <li><b>Asli keys local machine par rakhna risky hai.</b> Keys leak ho sakti hain ya galti se git mein chali jaayein, aur testing mein asli logon ko SMS/e-mail bhi ja sakte hain (paise bhi lagte hain).</li>
+  <li><b>Isliye sirf local par</b> OTP ko bypass karte hain, taaki developer baaki poori website aaram se chala aur test kar sake.</li>
+</ol>
+<div class="box danger"><b>Production (live website) mein OTP hamesha ON rakhna hai.</b> OTP OFF hone par naye accounts ka e-mail/mobile "unverified" rehta hai, jisse fake accounts ka khatra badhta hai. Live server par real SMTP ya Fast2SMS lagao aur OTP policy ON rakho.</div>
+
+<h2>3. Bypass kaise karein — 3 tareeke</h2>
+
+<h3>Tareeka A — OTP policy OFF (sabse aasaan, roz ke kaam ke liye)</h3>
+<p>Signup par OTP ka step hi nahi aata, account seedha ban jaata hai.</p>
+<pre><span class="c"># project folder mein terminal kholo</span>
+npm run dev:otp -- off             <span class="c"># signup OTP band</span>
+npm run dev:otp -- off --all       <span class="c"># signup + naye device login OTP dono band</span>
+npm run dev:otp -- on              <span class="c"># dono wapas ON</span>
+
+<span class="c"># ya pehli baar setup karte waqt hi:</span>
+npm run dev:setup -- --no-otp      <span class="c"># setup + signup OTP band</span></pre>
+<p><b>Yahi kaam admin panel se bhi hota hai:</b></p>
+<ol>
+  <li><span class="mono">http://localhost:3000/admin/login</span> par Super Admin se login karo.</li>
+  <li><b>Platform Settings</b> (<span class="mono">/admin/super/settings</span>) kholo.</li>
+  <li>Card <b>"Registration OTP verification"</b> ko <b>OFF</b> karo. Ek chhota reason likhna padega (audit log mein save hota hai). Save karo.</li>
+</ol>
+
+<h3>Tareeka B — Development mode (OTP screen par dikhta hai)</h3>
+<p>Jab OTP wala screen aur poora flow test karna ho, lekin e-mail/SMS na bhejna ho.</p>
+<ol>
+  <li>OTP policy <b>ON</b> rakho.</li>
+  <li>Super Admin se login karo, phir <b>Platform Settings → One-time passwords → Development mode → ON → Save</b>.</li>
+  <li><span class="mono">/signup</span> par signup karo. Code wale screen par <b>"Show my verification code"</b> dabao. Code screen par aa jayega, use daal do.</li>
+</ol>
+<p class="small">Code sirf server ki memory se padha jaata hai, kahin e-mail, log ya store nahi hota. Yahi box new-device login aur password reset par bhi aata hai. Live site par (<span class="mono">NODE_ENV=production</span>) yeh route 404 deta hai, aur development mode production mein on hi nahi hota.</p>
+
+<h3>Tareeka C — Asli e-mail OTP local par (delivery test karna ho)</h3>
+<p><span class="mono">.env</span> mein SMTP bharo aur OTP policy ON rakho:</p>
+<pre>SMTP_HOST=...        SMTP_PORT=587
+SMTP_USER=...        SMTP_PASS=...
+EMAIL_FROM="RishteyZindagi &lt;no-reply@your-domain&gt;"</pre>
+<p class="small">Local test ke liye Mailpit/MailHog (fake mail inbox) bhi laga sakte ho. SMS ke liye <span class="mono">FAST2SMS_*</span> variables, steps <span class="mono">FAST2SMS_SETUP.md</span> mein. Check: <span class="mono">npm run check:providers</span> aur <span class="mono">npm run dev:doctor</span>.</p>
+
+<h3>Kaunsa tareeka kab?</h3>
+<table>
+  <tr><th>Situation</th><th>Tareeka</th></tr>
+  <tr><td>Roz ka development, jaldi signup chahiye</td><td><b>A</b> — policy OFF</td></tr>
+  <tr><td>OTP screen / flow dekhna hai</td><td><b>B</b> — development mode</td></tr>
+  <tr><td>Asli e-mail/SMS aa raha hai ya nahi</td><td><b>C</b> — SMTP / Fast2SMS</td></tr>
+  <tr><td>Live website (production)</td><td><b>Sirf C, policy ON</b> — A aur B kabhi nahi</td></tr>
+</table>
+
+<h2 class="brk">4. Flow chart — signup par OTP kaise chalta hai</h2>
+<div class="fig">
+<svg width="700" height="420" viewBox="0 0 700 420" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="12">
+  <defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1C2D4F"/></marker></defs>
+  <g font-weight="600" fill="#1C2D4F">
+  <rect x="260" y="10" width="180" height="44" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="350" y="37" text-anchor="middle">Member: /signup form</text>
+  <rect x="240" y="85" width="220" height="50" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="350" y="106" text-anchor="middle">OTP policy ON hai?</text><text x="350" y="123" text-anchor="middle" font-weight="400" font-size="10.5">platform_settings → otp.policy</text>
+  <rect x="20" y="175" width="190" height="56" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="115" y="198" text-anchor="middle">Tareeka A: OFF</text><text x="115" y="216" text-anchor="middle" font-weight="400" font-size="10.5">code skip, account ban gaya</text>
+  <rect x="250" y="175" width="200" height="56" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="350" y="198" text-anchor="middle">Development mode ON?</text><text x="350" y="216" text-anchor="middle" font-weight="400" font-size="10.5">(production mein hamesha OFF)</text>
+  <rect x="20" y="270" width="210" height="56" rx="8" fill="#EEF2F8" stroke="#1C2D4F"/><text x="125" y="293" text-anchor="middle">Tareeka B</text><text x="125" y="311" text-anchor="middle" font-weight="400" font-size="10.5">"Show my verification code"</text>
+  <rect x="470" y="270" width="210" height="56" rx="8" fill="#FDF0D2" stroke="#9a6b00"/><text x="575" y="293" text-anchor="middle">SMTP / Fast2SMS set hai?</text><text x="575" y="311" text-anchor="middle" font-weight="400" font-size="10.5">Tareeka C</text>
+  <rect x="470" y="360" width="210" height="48" rx="8" fill="#fbe3e8" stroke="#a51e3b"/><text x="575" y="381" text-anchor="middle">"OTP delivery not configured"</text><text x="575" y="398" text-anchor="middle" font-weight="400" font-size="10.5">signup ruk jaata hai</text>
+  <rect x="250" y="360" width="200" height="48" rx="8" fill="#E8F5EE" stroke="#1e7a4f"/><text x="350" y="381" text-anchor="middle">Code daala → verified</text><text x="350" y="398" text-anchor="middle" font-weight="400" font-size="10.5">account ban gaya</text>
+  </g>
+  <g stroke="#1C2D4F" fill="none">
+  <path d="M350 54 L350 83" marker-end="url(#m)"/>
+  <path d="M240 110 L115 110 L115 173" marker-end="url(#m)"/>
+  <path d="M350 135 L350 173" marker-end="url(#m)"/>
+  <path d="M290 231 L150 268" marker-end="url(#m)"/>
+  <path d="M410 231 L540 268" marker-end="url(#m)"/>
+  <path d="M125 326 L125 384 L248 384" marker-end="url(#m)"/>
+  <path d="M575 326 L575 358" marker-end="url(#m)"/>
+  <path d="M520 326 L420 358" marker-end="url(#m)"/>
+  </g>
+  <g font-size="10.5" fill="#5d6475">
+  <text x="160" y="104">nahi (OFF)</text><text x="356" y="160">haan (ON)</text>
+  <text x="185" y="248">haan</text><text x="485" y="248">nahi</text>
+  <text x="295" y="347">haan: code e-mail/SMS</text><text x="582" y="347">nahi</text>
+  </g>
+</svg></div>
+
+<h2>5. Zaroori baatein</h2>
+<ul>
+  <li><span class="mono">dev:otp</span> aur <span class="mono">dev:setup</span> sirf local ke liye hain. <span class="mono">NODE_ENV=production</span> par yeh khud refuse kar dete hain.</li>
+  <li>Setting database mein save hoti hai (<span class="mono">platform_settings</span>, key <span class="mono">otp.policy</span>), server restart ke baad bhi rehti hai. Har badlav audit log mein jaata hai.</li>
+  <li>OTP OFF mein bhi password, account status aur rate limits lagte hain. Sirf code wala step hat-ta hai.</li>
+  <li>OTP OFF mein bane accounts ka e-mail/mobile "unverified" rehta hai.</li>
+  <li>Abhi kya setting hai, dekhne ke liye: <span class="mono">npm run dev:doctor</span> (read-only report).</li>
+</ul>
+
+<div class="box good"><b>Live par jaane se pehle checklist:</b> SMTP ya Fast2SMS lagao → <span class="mono">npm run check:providers</span> → Admin → Platform Settings: "Registration OTP verification" <b>ON</b>, Development mode <b>OFF</b> → ek asli signup karke dekho ki code aata hai.</div>
+
+</body>
+</html>
