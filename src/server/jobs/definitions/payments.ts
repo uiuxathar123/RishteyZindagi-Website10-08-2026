@@ -12,6 +12,8 @@
  *   3. PENDING refunds are re-read from the gateway (syncRefund).
  *   4. Payments closed as FAILED in the last 3 days are checked for a late capture and
  *      flagged once for manual review (audit action payment.late_capture_detected).
+ *   2c (D-6). A membership payment verified as SUCCESS whose membership is still PENDING, or
+ *      that has no invoice, is fulfilled here (idempotent; see fulfilMembershipPayment).
  */
 import { sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
@@ -22,6 +24,7 @@ import { notify } from "@/server/modules/notifications/notifications.service";
 import * as paymentsRepo from "@/server/modules/payments/payments.repository";
 import * as pcpRepo from "@/server/modules/payments/payments-pcp.repository";
 import { reconcilePaymentFromGateway } from "@/server/modules/payments/webhooks.service";
+import { fulfilMembershipPayment } from "@/server/modules/payments/payments.service";
 import { syncRefund } from "@/server/modules/payments/refunds.service";
 import { fulfilMatchmakingPayment } from "@/server/modules/matchmaking/matchmaking-fulfilment";
 import { listPaidPaymentsAwaitingFulfilment } from "@/server/modules/matchmaking/matchmaking.repository";
@@ -71,7 +74,7 @@ export const paymentReconcileJob: JobDefinition = {
   suggestedSchedule: "*/10 * * * *",
   async run() {
     const expiryMs = paymentExpiryMinutes() * 60_000;
-    const stats = { checked: 0, resolved: 0, expiredClosed: 0, stillPending: 0, gatewayErrors: 0, refundsChecked: 0, refundsResolved: 0, lateCaptureChecked: 0, matchmakingFulfilled: 0 };
+    const stats = { checked: 0, resolved: 0, expiredClosed: 0, stillPending: 0, gatewayErrors: 0, refundsChecked: 0, refundsResolved: 0, lateCaptureChecked: 0, matchmakingFulfilled: 0, membershipFulfilled: 0 };
 
     // 1 + 2 -----------------------------------------------------------------
     const pending = await pcpRepo.listPendingOlderThan(new Date(Date.now() - RECONCILE_MIN_AGE_MINUTES * 60_000), MAX_PER_RUN);
@@ -106,6 +109,34 @@ export const paymentReconcileJob: JobDefinition = {
         if (paid && (await fulfilMatchmakingPayment(paid)) === "ACTIVATED") stats.matchmakingFulfilled++;
       } catch (err) {
         logError("job-payment-reconcile-matchmaking", err, { paymentId });
+      }
+    }
+
+    // 2c (D-6): a verified membership payment whose activation or invoice was interrupted is completed here.
+    const unfulfilled = await db.execute(sql`
+      SELECT p.id FROM payments p
+      JOIN memberships m ON m.id = p.membership_id
+      WHERE p.status = 'SUCCESS' AND p.matchmaking_case_id IS NULL
+        AND (
+          m.status = 'PENDING'
+          OR (
+            NOT EXISTS (SELECT 1 FROM invoices i WHERE i.payment_id = p.id)
+            AND EXISTS (SELECT 1 FROM transactions t WHERE t.payment_id = p.id)
+          )
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM audit_logs a
+          WHERE a.action = 'payment.success_membership_not_started' AND a.entity_type = 'payment' AND a.entity_id = p.id
+        )
+      ORDER BY p.updated_at LIMIT 50`);
+    for (const row of unfulfilled.rows as unknown as Array<{ id: string }>) {
+      try {
+        const paid = await paymentsRepo.findById(row.id);
+        if (!paid) continue;
+        const outcome = await fulfilMembershipPayment(paid);
+        if (outcome === "ACTIVATED" || outcome === "INVOICE_ISSUED") stats.membershipFulfilled++;
+      } catch (err) {
+        logError("job-payment-reconcile-membership", err, { paymentId: row.id });
       }
     }
 

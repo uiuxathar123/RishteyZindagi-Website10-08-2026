@@ -82,7 +82,7 @@ export interface ResolvePaymentOutcomeInput {
  * calls on the same payment could BOTH read status="PENDING" before
  * either writes, and both would then proceed to activate the membership
  * and issue a SECOND invoice for the same payment (see
- * activateMembershipFromPayment's own call site). Returns `undefined`
+ * fulfilMembershipPayment's own call site). Returns `undefined`
  * when a concurrent call already won that race — the caller treats that
  * exactly like the sequential-replay case (ALREADY_RESOLVED), never
  * re-running activation/invoice issuance a second time. */

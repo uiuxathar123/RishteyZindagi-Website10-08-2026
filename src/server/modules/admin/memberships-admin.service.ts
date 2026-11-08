@@ -2,7 +2,7 @@
  * B9: admin membership list/filter. Reuses the existing `payments.review`
  * permission — memberships in this system exist entirely as the product
  * of the checkout/payment lifecycle (see memberships.service.ts /
- * payments.service.ts's activateMembershipFromPayment), so an admin
+ * payments.service.ts's fulfilMembershipPayment), so an admin
  * membership lookup is the same billing-admin surface as invoice search
  * and pending-payment review, not a separate "member account" concern
  * (`users.view`'s domain — identity/status, not billing state). See

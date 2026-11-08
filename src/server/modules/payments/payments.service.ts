@@ -13,15 +13,20 @@
  * re-resolved from "whichever gateway is active now" (see
  * gateways.repository.ts's own comment: changing the active gateway
  * never touches an existing payment's own stored gatewayId). Only on a
- * genuine SUCCESS does activateMembership+issueInvoice run, inside one
- * DB transaction.
+ * genuine SUCCESS does fulfilment (membership activation + invoice) run.
+ *
+ * D-6 fix: the payment's SUCCESS is committed first (compare-and-swap, one
+ * winner) and fulfilment runs after it. Fulfilment is idempotent
+ * (fulfilMembershipPayment below), so a crash or error between the two is
+ * repaired by any replay of verify / webhook / manual verify, and by the
+ * payment-reconcile job — a paid membership can no longer stay PENDING.
  *
  * Replay protection: verify/manual-activate both no-op (return the
  * current state unchanged) once a payment is no longer PENDING — calling
  * either twice can never double-activate a membership or double-issue an
  * invoice.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { memberships as membershipsTable } from "@/server/db/schema";
 import { AuthorizationError, ConflictError, NotFoundError, ValidationError } from "@/server/lib/errors";
@@ -39,6 +44,7 @@ import * as membershipPlansRepo from "@/server/modules/memberships/membership-pl
 import * as membershipsRepo from "@/server/modules/memberships/memberships.repository";
 import { tierRank } from "@/server/modules/memberships/plan-tiers";
 import { issueInvoice } from "@/server/modules/invoices/invoices.service";
+import * as invoicesRepo from "@/server/modules/invoices/invoices.repository";
 import { isPaymentDevMode } from "./dev-mode";
 import { fulfilMatchmakingPayment } from "@/server/modules/matchmaking/matchmaking-fulfilment";
 
@@ -72,7 +78,7 @@ function requireMemberSubject(ctx: AuthContext): string {
  * higher tier is allowed — an equal-tier switch (e.g. a currency change)
  * or a genuine upgrade both proceed to checkout; the OLD membership is
  * only ever cancelled on the NEW payment's genuine success (see
- * activateMembershipFromPayment below), never at checkout time. */
+ * fulfilMembershipPayment below), never at checkout time. */
 async function assertPlanSwitchAllowed(userId: string, newPlanDurationDays: number): Promise<void> {
   const current = await membershipsRepo.findActiveForUser(userId);
   if (!current) return;
@@ -270,52 +276,89 @@ async function assertNoRecentPendingCheckoutForPlan(userId: string, planId: stri
   }
 }
 
-async function activateMembershipFromPayment(payment: PaymentRow): Promise<void> {
-  const membership = payment.membershipId ? await membershipsRepo.findById(payment.membershipId) : undefined;
-  if (!membership) throw new NotFoundError("No membership is associated with this payment.");
+export type MembershipFulfilmentOutcome = "ACTIVATED" | "INVOICE_ISSUED" | "ALREADY_FULFILLED" | "NOT_FULFILLABLE";
+
+/**
+ * D-6: fulfilment of a verified membership payment. Safe to run any number of times, concurrently or not:
+ *   1. Activation runs in one transaction with the membership row locked (SELECT ... FOR UPDATE). Only a PENDING
+ *      membership is activated (and any other ACTIVE membership of the member cancelled, the upgrade rule). A
+ *      membership that is no longer PENDING is never touched again.
+ *   2. The invoice is issued only if this payment has none yet, under the same row lock, so two concurrent
+ *      replays cannot issue two invoices. If issuing fails, activation stays committed (the member has paid) and
+ *      the next replay or the payment-reconcile job issues the invoice.
+ *   3. The "membership activated" notification goes out only from the call that activated it (and carries a
+ *      dedupe key besides).
+ * A SUCCESS payment whose membership was closed without ever starting cannot be activated automatically; it is
+ * flagged once in the audit log (payment.success_membership_not_started) for staff to activate or refund.
+ */
+export async function fulfilMembershipPayment(payment: PaymentRow): Promise<MembershipFulfilmentOutcome> {
+  if (payment.status !== "SUCCESS" || payment.matchmakingCaseId) return "NOT_FULFILLABLE";
+  const membershipId = payment.membershipId;
+  const membership = membershipId ? await membershipsRepo.findById(membershipId) : undefined;
+  if (!membershipId || !membership || membership.userId !== payment.userId) {
+    throw new NotFoundError("No membership is associated with this payment.");
+  }
   const plan = await membershipPlansRepo.findById(membership.planId);
   if (!plan) throw new NotFoundError("Membership plan not found.");
 
-  await db.transaction(async (tx) => {
-    // Cancel any OTHER currently-ACTIVE membership for this user (the
-    // upgrade rule: "immediately cancels/ends the current one, no matter
-    // how much time was left") — there should be at most one, given
-    // downgrade-while-active is blocked at checkout and the duplicate-
-    // checkout guard, but this defensively cancels every match rather
-    // than assuming exactly one.
-    const now = new Date();
+  // 1. activation (at most once)
+  const step = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(membershipsTable).where(eq(membershipsTable.id, membershipId)).for("update");
+    if (!current) return "MISSING" as const;
+    if (current.status !== "PENDING") return current.startedAt ? ("ALREADY" as const) : ("NOT_STARTED" as const);
+    // The upgrade rule: any other currently-ACTIVE membership of this member ends now, however much time was left.
     await tx
       .update(membershipsTable)
       .set({ status: "CANCELLED" })
-      .where(
-        and(
-          eq(membershipsTable.userId, membership.userId),
-          eq(membershipsTable.status, "ACTIVE")
-          // Deliberately no `ne(id, membership.id)` needed — `membership`
-          // itself is still PENDING at this point in the flow (it only
-          // becomes ACTIVE in the next statement), so it can never match
-          // this ACTIVE-status predicate itself.
-        )
-      );
-
-    const startedAt = now;
+      .where(and(eq(membershipsTable.userId, current.userId), eq(membershipsTable.status, "ACTIVE"), ne(membershipsTable.id, membershipId)));
+    const now = new Date();
     const expiresAt = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
-    await tx.update(membershipsTable).set({ status: "ACTIVE", startedAt, expiresAt }).where(eq(membershipsTable.id, membership.id));
+    await tx.update(membershipsTable).set({ status: "ACTIVE", startedAt: now, expiresAt }).where(eq(membershipsTable.id, membershipId));
+    return "ACTIVATED" as const;
   });
-
-  const [transaction] = await Promise.all([paymentsRepo.findLatestTransactionForPayment(payment.id)]);
-  const refreshedMembership = await membershipsRepo.findById(membership.id);
-  if (transaction && refreshedMembership) {
-    await issueInvoice({ userId: payment.userId, payment, transaction, membership: refreshedMembership, plan });
+  if (step === "MISSING") throw new NotFoundError("No membership is associated with this payment.");
+  if (step === "NOT_STARTED") {
+    const flagged = await db.execute(sql`
+      SELECT 1 FROM audit_logs WHERE action = 'payment.success_membership_not_started' AND entity_type = 'payment' AND entity_id = ${payment.id} LIMIT 1`);
+    if (flagged.rows.length === 0) {
+      await record({
+        actorType: "SYSTEM",
+        action: "payment.success_membership_not_started",
+        entityType: "payment",
+        entityId: payment.id,
+        metadata: {
+          membershipId,
+          note: "Payment verified as SUCCESS but its membership was closed without ever starting. Needs manual review: activate or refund.",
+          amountInPaise: payment.amountInPaise,
+        },
+      });
+    }
+    return "NOT_FULFILLABLE";
   }
 
-  await notify({
-    userId: payment.userId,
-    channel: "IN_APP",
-    title: "Membership activated",
-    body: `Your ${plan.name} membership is now active.`,
-    dedupeKey: `membership_activated:${membership.id}`,
+  // 2. invoice (at most one per payment; serialised by the same row lock)
+  let invoiceIssued = false;
+  await db.transaction(async (tx) => {
+    await tx.select({ id: membershipsTable.id }).from(membershipsTable).where(eq(membershipsTable.id, membershipId)).for("update");
+    if (await invoicesRepo.findByPaymentId(payment.id)) return;
+    const transaction = await paymentsRepo.findLatestTransactionForPayment(payment.id);
+    const refreshedMembership = await membershipsRepo.findById(membershipId);
+    if (!transaction || !refreshedMembership) return;
+    await issueInvoice({ userId: payment.userId, payment, transaction, membership: refreshedMembership, plan });
+    invoiceIssued = true;
   });
+
+  if (step === "ACTIVATED") {
+    await notify({
+      userId: payment.userId,
+      channel: "IN_APP",
+      title: "Membership activated",
+      body: `Your ${plan.name} membership is now active.`,
+      dedupeKey: `membership_activated:${membershipId}`,
+    });
+    return "ACTIVATED";
+  }
+  return invoiceIssued ? "INVOICE_ISSUED" : "ALREADY_FULFILLED";
 }
 
 /** What a payment pays for, in member-facing wording. */
@@ -334,7 +377,7 @@ async function fulfilVerifiedPayment(payment: PaymentRow): Promise<void> {
     await fulfilMatchmakingPayment(payment);
     return;
   }
-  await activateMembershipFromPayment(payment);
+  await fulfilMembershipPayment(payment);
 }
 
 export interface VerifyResult {
@@ -378,9 +421,9 @@ async function resolveOrAlreadyResolved(
 /** PCP: exported so webhook / reconciliation code re-uses the exact same race-safe verify path. */
 export async function verifyPaymentInternal(payment: PaymentRow): Promise<VerifyResult> {
   if (payment.status !== "PENDING") {
-    // A replay of an already-successful matchmaking payment completes any fulfilment step a failed earlier attempt
-    // left undone (idempotent: nothing is ever done twice). Membership replays are unchanged.
-    if (payment.status === "SUCCESS" && payment.matchmakingCaseId) await fulfilMatchmakingPayment(payment);
+    // A replay of an already-successful payment completes any fulfilment step a failed earlier attempt left undone
+    // (membership or Personal Matchmaking; both are idempotent, nothing is ever done twice). D-6 fix.
+    if (payment.status === "SUCCESS") await fulfilVerifiedPayment(payment);
     return { payment, status: "ALREADY_RESOLVED" };
   }
   if (!payment.gatewayReference) {
@@ -558,7 +601,7 @@ export async function manualVerifyPayment(ctx: AuthContext, paymentId: string, i
   const payment = await paymentsRepo.findById(paymentId);
   if (!payment) throw new NotFoundError("Payment not found.");
   if (payment.status !== "PENDING") {
-    if (payment.status === "SUCCESS" && payment.matchmakingCaseId) await fulfilMatchmakingPayment(payment);
+    if (payment.status === "SUCCESS") await fulfilVerifiedPayment(payment);
     return { payment, status: "ALREADY_RESOLVED" };
   }
 
