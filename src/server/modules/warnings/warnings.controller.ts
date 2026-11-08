@@ -10,6 +10,7 @@ import { checkRateLimit } from "@/server/middleware/rate-limit";
 import { ValidationError } from "@/server/lib/errors";
 import { ok, created } from "@/server/lib/response";
 import * as warningsService from "./warnings.service";
+import { getClientIp } from "@/server/lib/client-ip";
 
 const uuidField = z.string().uuid();
 
@@ -23,7 +24,7 @@ function parseParams<T>(schema: z.ZodSchema<T>, params: unknown): T {
 
 function requestMeta(req: NextRequest) {
   return {
-    ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip"),
+    ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   };
 }

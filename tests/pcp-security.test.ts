@@ -304,8 +304,11 @@ describe("rate limiting policy", () => {
     afterEach(() => {
       vi.unstubAllEnvs();
     });
+    // A fresh e-mail per attempt: these tests are about the per-IP limit, not the per-account lockout (S-2).
+    let n = 0;
+    const nextEmail = () => `nobody-${++n}@example.com`;
     const login = (ip: string) =>
-      adminLogin(jreq("http://localhost/api/v1/admin/login", { body: { email: "nobody@example.com", password: "wrongpassword" }, headers: { "x-forwarded-for": ip } }));
+      adminLogin(jreq("http://localhost/api/v1/admin/login", { body: { email: nextEmail(), password: "wrongpassword" }, headers: { "x-forwarded-for": ip } }));
 
     it("[rl-429-admin-login] the 11th attempt in a minute is 429 with Retry-After; the earlier ones are ordinary 401s", async () => {
       const statuses: number[] = [];
@@ -339,13 +342,13 @@ describe("rate limiting policy", () => {
       let blocked = 0;
       for (let i = 0; i < 14; i++) {
         const r = await POST(
-          jr("http://localhost/api/v1/admin/login", { body: { email: "nobody@example.com", password: "wrongpassword" }, headers: { "x-forwarded-for": `10.9.8.${i + 1}, 203.0.113.77` } })
+          jr("http://localhost/api/v1/admin/login", { body: { email: nextEmail(), password: "wrongpassword" }, headers: { "x-forwarded-for": `10.9.8.${i + 1}, 203.0.113.77` } })
         );
         if (r.status === 429) blocked++;
       }
       expect(blocked).toBeGreaterThanOrEqual(4);
       // a different real client (different proxy-appended entry) is unaffected
-      const other = await POST(jr("http://localhost/api/v1/admin/login", { body: { email: "nobody@example.com", password: "wrongpassword" }, headers: { "x-forwarded-for": "10.9.8.1, 203.0.113.78" } }));
+      const other = await POST(jr("http://localhost/api/v1/admin/login", { body: { email: nextEmail(), password: "wrongpassword" }, headers: { "x-forwarded-for": "10.9.8.1, 203.0.113.78" } }));
       expect(other.status).toBe(401);
     });
   });

@@ -428,6 +428,7 @@ export interface AdminDashboardStats {
       failed: number;
       pending: number;
       revenueByCurrency: Array<{ currency: string; totalInSmallestUnit?: number; amountInPaise?: number; total?: number }>;
+      revenueVisible?: boolean;
     };
     reports: { open: number };
     suspensions: { activeAfterThreshold: number };

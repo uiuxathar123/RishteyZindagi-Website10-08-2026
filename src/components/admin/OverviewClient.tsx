@@ -68,8 +68,14 @@ export function OverviewClient() {
                 <StatCard
                   icon={IndianRupee}
                   label="Revenue (successful payments)"
-                  value={revenue.length === 0 ? "None yet" : revenue.map((r) => formatMoney(r.amount, r.currency)).join(" · ")}
-                  hint="All time, per currency"
+                  value={
+                    stats.payments.revenueVisible === false
+                      ? "Super Admin only"
+                      : revenue.length === 0
+                        ? "None yet"
+                        : revenue.map((r) => formatMoney(r.amount, r.currency)).join(" · ")
+                  }
+                  hint={stats.payments.revenueVisible === false ? "Revenue figures are visible to Super Admin only" : "All time, per currency"}
                 />
               </div>
               <p className="mt-3 text-[12.5px] text-rz-muted">

@@ -59,3 +59,14 @@ export async function requirePermission(ctx: AuthContext, permissionKey: string)
 
   if (!grants.some((g) => g.key === permissionKey)) throw new AuthorizationError();
 }
+
+/** Non-throwing variant of requirePermission: true when this admin may use `permissionKey` right now. */
+export async function hasPermission(ctx: AuthContext, permissionKey: string): Promise<boolean> {
+  try {
+    await requirePermission(ctx, permissionKey);
+    return true;
+  } catch (err) {
+    if (err instanceof AuthorizationError) return false;
+    throw err;
+  }
+}

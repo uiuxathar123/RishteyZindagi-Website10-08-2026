@@ -1,7 +1,6 @@
 # Services
 
 Application data comes from the backend through the typed API client in
-`src/lib/api/` (see `client.ts`, `hooks.ts`). The only module left here is
-`blogService`, which serves the static marketing articles in
-`src/data/blogPosts.ts` — the backend has no CMS/blog API, so this content is
-intentionally static.
+`src/lib/api/` (see `client.ts`, `hooks.ts`). Blog articles used to be a
+static file served from here; they now live in the database and are managed
+in Admin → Blog (`src/server/modules/blog/`).

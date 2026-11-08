@@ -52,13 +52,8 @@ import { recordEvent } from "@/server/modules/behaviour-events/behaviour-events.
 // about this file's own B6 business rules, error types, or return values
 // changes.
 import { notify } from "@/server/modules/notifications/notifications.service";
-// B8 (disclosed, pre-approved, additive touch — see BACKEND.md's B8
-// section, "interactions.service.ts membership gate"): "new Interests
-// cannot be sent while membership is expired/inactive; received
-// Interests can still be accepted/rejected" — a single guard added at
-// the top of sendInterest ONLY (see below). respondToInterest and
-// withdrawInterest are completely untouched.
-import { hasActiveMembership } from "@/server/modules/memberships/membership-gate";
+// B8 added a membership gate to sendInterest; it was removed by owner decision D-3 (2026-11-08): interests are
+// free for every member. Chat still needs an active membership.
 import * as repo from "./interactions.repository";
 import type { InterestRow, LikeRow, ShortlistRow, BlockRow, MatchRow } from "./interactions.repository";
 
@@ -170,17 +165,9 @@ export async function sendInterest(ctx: AuthContext, toUserId: string): Promise<
   assertNotSelf(fromUserId, toUserId);
   await assertCanInitiate(fromUserId, toUserId);
 
-  // B8: sending a NEW interest requires the sender to have an active
-  // membership (see this file's top-of-file B8 comment). Deliberately
-  // placed after assertCanInitiate (so a bad/self/blocked target still
-  // reports its own, more specific error first) but before any of this
-  // function's own state reads — a request-time-fresh check, same
-  // real-time-read discipline `hasActiveMembership` itself documents.
-  // respondToInterest/withdrawInterest never call this.
-  const senderHasActiveMembership = await hasActiveMembership(fromUserId);
-  if (!senderHasActiveMembership) {
-    throw new AuthorizationError("An active membership is required to send new interests.");
-  }
+  // Owner decision (D-3, 2026-11-08): sending an interest is FREE for every member. The B8 membership gate that
+  // used to sit here was removed; chat still requires an active membership (chat.service.ts). The usual per-IP
+  // and shared rate limits still apply to this endpoint.
 
   const reverse = await repo.findInterestByPair(toUserId, fromUserId);
   if (reverse && reverse.status === "ACCEPTED") {

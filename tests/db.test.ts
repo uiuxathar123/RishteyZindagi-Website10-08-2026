@@ -101,6 +101,7 @@ describe("database", () => {
       // community groups (groups, members, posts, post reports) and renewal follow-up cycles — 66 in total.
       "contact_messages",
       "success_stories",
+      "blog_posts",
       "digest_log",
       "community_groups",
       "community_group_members",

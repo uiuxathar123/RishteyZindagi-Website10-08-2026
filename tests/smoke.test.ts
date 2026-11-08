@@ -175,10 +175,7 @@ describe("B14 production smoke test suite", () => {
     expect(recRes.status).toBe(200);
 
     // --- 7. Interest ---------------------------------------------------------
-    // Sending a NEW interest requires an active membership (B6 rule) — a
-    // real smoke test exercises that real business rule rather than
-    // bypassing it, so an active membership is granted first, exactly the
-    // way every other Interest-related test in this suite does.
+    // Sending an interest is free (owner decision D-3); the membership granted here is for the chat step later.
     await activateMembershipForTests(profile.member.userId);
     const interestRes = await sendInterest(
       preq("http://localhost/api/v1/interactions/interests", { toUserId: counterpart.member.userId }, profile.member.sessionToken)

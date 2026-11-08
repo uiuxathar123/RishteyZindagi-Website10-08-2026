@@ -86,6 +86,7 @@ export function OtpChallengePanel({
   backLabel,
   children,
   idPrefix = "otp",
+  onlyIfAccountExists = false,
 }: {
   challenge: Pick<OtpChallenge, "channel" | "expiresInSeconds" | "resendAvailableAt">;
   /** Where the code went, e.g. the email or phone the person typed. */
@@ -96,6 +97,9 @@ export function OtpChallengePanel({
   submitLabel: string;
   /** Throw to show an error; resolve to continue. */
   onSubmit: (code: string) => Promise<void>;
+  /** True where the backend sends a code only when an account exists for `destination` (OTP login, password
+   * reset) and deliberately answers the same either way, so the wording must not promise a code was sent. */
+  onlyIfAccountExists?: boolean;
   /** Request a fresh code; resolves with the new challenge. */
   onResend: () => Promise<Pick<OtpChallenge, "channel" | "expiresInSeconds" | "resendAvailableAt">>;
   onBack?: () => void;
@@ -152,7 +156,7 @@ export function OtpChallengePanel({
       setChannel(next.channel);
       setTimes(timesFor(next));
       setCode("");
-      setNotice("A new code has been sent.");
+      setNotice(onlyIfAccountExists ? "If an account exists for this email, a new code has been sent." : "A new code has been sent.");
       inputRef.current?.focus();
     } catch (err) {
       setError(messageOf(err));
@@ -163,16 +167,33 @@ export function OtpChallengePanel({
 
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
-      <p className="text-sm text-rz-muted">
-        We sent a verification code to your {channelPhrase(channel)}
-        {destination ? (
-          <>
-            {" "}
-            (<span className="break-all font-semibold text-rz-navy">{destination}</span>)
-          </>
-        ) : null}
-        . Enter it below.
-      </p>
+      {onlyIfAccountExists ? (
+        <div className="space-y-1.5 text-sm text-rz-muted">
+          <p>
+            If an account exists for{" "}
+            {destination ? <span className="break-all font-semibold text-rz-navy">{destination}</span> : `this ${channelPhrase(channel)}`}, we have
+            sent a verification code to it. Enter it below.
+          </p>
+          <p className="text-xs">
+            No code after a few minutes? Check your Spam folder. New to RishteyZindagi?{" "}
+            <a href="/signup" className="rz-focus font-semibold text-rz-maroon hover:underline">
+              Create your profile
+            </a>{" "}
+            first.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-rz-muted">
+          We sent a verification code to your {channelPhrase(channel)}
+          {destination ? (
+            <>
+              {" "}
+              (<span className="break-all font-semibold text-rz-navy">{destination}</span>)
+            </>
+          ) : null}
+          . Enter it below.
+        </p>
+      )}
 
       <div>
         <FieldLabel htmlFor={`${idPrefix}-code`}>Verification code</FieldLabel>

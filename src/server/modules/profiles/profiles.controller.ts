@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/server/middleware/rate-limit";
 import { ValidationError, NotFoundError } from "@/server/lib/errors";
 import { getStorageProvider } from "@/server/modules/storage/factory";
 import * as profilesService from "./profiles.service";
+import { getClientIp } from "@/server/lib/client-ip";
 
 const createProfileSchema = z.object({
   gender: z.enum(["MALE", "FEMALE"]),
@@ -47,7 +48,7 @@ async function tryAuthenticate(req: NextRequest): Promise<AuthContext | null> {
 }
 
 function ipKey(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+  return getClientIp(req);
 }
 
 /** Validates Next.js's dynamic-route params object the same way

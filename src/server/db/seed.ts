@@ -74,6 +74,8 @@ const PERMISSIONS = [
   { key: "support.manage", description: "Read and answer contact-form messages and edit the public support contact details." },
   { key: "content.manage", description: "Create, edit, publish and remove success stories shown on the public site." },
   { key: "groups.manage", description: "Create and edit community groups, hide posts, and remove members from groups." },
+  // Blog Manager (Admin → Blog). Super Admin only by default; a Super Admin can grant it to Staff.
+  { key: "blog.manage", description: "Write, edit, publish and remove blog articles shown on the public site." },
 ];
 
 // SUPER_ADMIN gets every permission; STAFF_ADMIN gets a deliberately
@@ -521,6 +523,11 @@ async function main() {
   const pool = new Pool({ connectionString });
   const db = drizzle(pool, { schema });
 
+  // D-9: STAFF_ADMIN's default permissions are granted only when the role is created by this run. On a re-seed the
+  // role already exists and a Super Admin may have removed some of its permissions on purpose; they stay removed.
+  const [staffRoleBefore] = await db.select({ id: schema.adminRoles.id }).from(schema.adminRoles).where(eq(schema.adminRoles.name, "STAFF_ADMIN"));
+  const grantStaffDefaults = !staffRoleBefore;
+
   console.log("Seeding admin roles...");
   for (const role of ADMIN_ROLES) {
     await db
@@ -554,7 +561,7 @@ async function main() {
       .values({ roleId: superAdminRole.id, permissionId: perm.id })
       .onConflictDoNothing();
 
-    if (STAFF_ADMIN_DEFAULT_PERMISSIONS.includes(perm.key)) {
+    if (grantStaffDefaults && STAFF_ADMIN_DEFAULT_PERMISSIONS.includes(perm.key)) {
       await db
         .insert(schema.rolePermissions)
         .values({ roleId: staffAdminRole.id, permissionId: perm.id })

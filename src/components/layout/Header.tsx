@@ -13,11 +13,13 @@ import { useEffect, useRef, useState } from "react";
 // About). Blog is real, substantive content built in Phase 2 — it's kept
 // as an additional item after the spec's list rather than removed, since
 // hiding already-built content isn't something the brief asked for.
+// Matchmaking (Personal Matchmaking) added after Membership at the owner's request (2026-11-09).
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/how-it-works", label: "How It Works" },
   { href: "/search", label: "Search" },
   { href: "/membership", label: "Membership" },
+  { href: "/personal-matchmaking", label: "Matchmaking" },
   { href: "/success-stories", label: "Success Stories" },
   { href: "/safety", label: "Safety" },
   { href: "/about", label: "About" },
@@ -117,7 +119,7 @@ export function Header() {
       <Container className="flex h-[76px] items-center justify-between gap-6">
         <Logo />
 
-        <nav aria-label="Primary" className="hidden flex-1 items-center justify-center gap-7 xl:flex">
+        <nav aria-label="Primary" className="hidden flex-1 items-center justify-center gap-5 xl:flex 2xl:gap-7">
           {NAV_LINKS.map((link) => {
             const active = pathname === link.href;
             return (

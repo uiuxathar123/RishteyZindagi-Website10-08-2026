@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
-import { BLOG_POSTS } from "@/data/blogPosts";
+import { listPublishedPosts } from "@/server/modules/blog/blog.service";
+import { SITE_URL } from "@/lib/site";
 
-// Same canonical origin as the root layout's metadataBase.
-const SITE_URL = "https://www.rishteyzindagi.com";
+// Published articles come from Admin → Blog, so the sitemap is generated on each request.
+export const dynamic = "force-dynamic";
 
 /** Public pages only — member, admin, checkout and API routes are never listed (see robots.ts). */
 const PUBLIC_PAGES: Array<{ path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] }> = [
@@ -24,12 +25,18 @@ const PUBLIC_PAGES: Array<{ path: string; priority: number; changeFrequency: Met
   { path: "/refund-policy", priority: 0.2, changeFrequency: "yearly" },
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  let posts: Awaited<ReturnType<typeof listPublishedPosts>> = [];
+  try {
+    posts = await listPublishedPosts();
+  } catch {
+    posts = [];
+  }
   return [
     ...PUBLIC_PAGES.map((p) => ({ url: `${SITE_URL}${p.path}`, changeFrequency: p.changeFrequency, priority: p.priority })),
-    ...BLOG_POSTS.map((post) => ({
+    ...posts.map((post) => ({
       url: `${SITE_URL}/blog/${post.slug}`,
-      lastModified: new Date(post.publishedAt),
+      lastModified: new Date(post.updatedAt),
       changeFrequency: "monthly" as const,
       priority: 0.5,
     })),

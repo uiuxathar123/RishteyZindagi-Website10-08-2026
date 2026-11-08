@@ -1,59 +1,92 @@
 import type { Metadata } from "next";
 import { Container, Section } from "@/components/ui/Container";
 import { Badge } from "@/components/ui/Badge";
-import { BLOG_POSTS } from "@/data/blogPosts";
-import { blogService } from "@/services/blogService";
+import { BlogContent } from "@/components/blog/BlogContent";
+import { getPublishedPost, listRelatedPosts, type BlogPostView } from "@/server/modules/blog/blog.service";
 import { CalendarDays, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SITE_URL } from "@/lib/site";
+
+// Articles are managed at runtime in Admin → Blog.
+export const dynamic = "force-dynamic";
 
 interface BlogPostPageProps {
   params: { slug: string };
 }
 
-export async function generateStaticParams() {
-  return BLOG_POSTS.map((post) => ({ slug: post.slug }));
+async function load(slug: string): Promise<BlogPostView | null> {
+  try {
+    return await getPublishedPost(slug);
+  } catch {
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: BlogPostPageProps): Promise<Metadata> {
-  const post = await blogService.getBySlug(params.slug);
-  if (!post) return { title: "Article Not Found" };
-
+  const post = await load(params.slug);
+  if (!post) return { title: "Article Not Found", robots: { index: false } };
+  const description = post.seoDescription ?? post.excerpt;
   return {
-    title: post.title,
-    description: post.excerpt,
+    title: post.seoTitle ?? post.title,
+    description,
     alternates: { canonical: `/blog/${post.slug}` },
     openGraph: {
       type: "article",
-      title: post.title,
-      description: post.excerpt,
-      images: [{ url: post.coverImage }],
+      title: post.seoTitle ?? post.title,
+      description,
+      ...(post.publishedAt ? { publishedTime: post.publishedAt } : {}),
+      modifiedTime: post.updatedAt,
+      authors: [post.authorName],
+      ...(post.coverSrc ? { images: [{ url: post.coverSrc, alt: post.coverImageAlt }] } : {}),
     },
   };
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+function formatDate(iso: string | null, month: "long" | "short" = "long") {
+  return iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month, year: "numeric" }) : "";
 }
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
-  const post = await blogService.getBySlug(params.slug);
+  const post = await load(params.slug);
   if (!post) notFound();
 
-  const related = await blogService.related(post.slug, 3);
+  let related: BlogPostView[] = [];
+  try {
+    related = await listRelatedPosts(post.slug, 3);
+  } catch {
+    related = [];
+  }
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.seoDescription ?? post.excerpt,
+    datePublished: post.publishedAt,
+    dateModified: post.updatedAt,
+    author: { "@type": "Organization", name: post.authorName },
+    publisher: { "@type": "Organization", name: "RishteyZindagi" },
+    mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
+    ...(post.coverSrc ? { image: post.coverSrc.startsWith("/") ? `${SITE_URL}${post.coverSrc}` : post.coverSrc } : {}),
+  };
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className="relative h-[280px] w-full overflow-hidden bg-rz-peach md:h-[380px]">
-        <Image
-          src={post.coverImage}
-          alt={post.coverImageAlt}
-          fill
-          sizes="100vw"
-          priority
-          className="object-cover"
-        />
+        {post.coverSrc && (
+          <Image
+            src={post.coverSrc}
+            alt={post.coverImageAlt}
+            fill
+            sizes="100vw"
+            priority
+            unoptimized={post.coverSrc.startsWith("/media/")}
+            className="object-cover"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-rz-navy-dark/70 via-rz-navy-dark/10 to-transparent" />
       </div>
 
@@ -64,7 +97,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             {post.title}
           </h1>
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-rz-border pb-6 text-sm text-rz-muted">
-            <span className="font-medium text-rz-text">{post.author}</span>
+            <span className="font-medium text-rz-text">{post.authorName}</span>
             <span className="flex items-center gap-1.5">
               <CalendarDays className="h-4 w-4" />
               {formatDate(post.publishedAt)}
@@ -75,12 +108,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             </span>
           </div>
 
-          <div className="mt-8 space-y-5">
-            {post.content.map((paragraph, i) => (
-              <p key={i} className="text-[16px] leading-[1.85] text-rz-text">
-                {paragraph}
-              </p>
-            ))}
+          <div className="mt-8">
+            <BlogContent content={post.content} />
           </div>
         </Container>
       </Section>
@@ -97,20 +126,23 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                   className="rz-focus group flex flex-col overflow-hidden rounded-lg border border-rz-border bg-white transition-shadow duration-200 hover:shadow-card-sm"
                 >
                   <div className="relative aspect-[3/2] w-full overflow-hidden bg-rz-peach">
-                    <Image
-                      src={r.coverImage}
-                      alt={r.coverImageAlt}
-                      fill
-                      sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
-                      className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    />
+                    {r.coverSrc && (
+                      <Image
+                        src={r.coverSrc}
+                        alt={r.coverImageAlt}
+                        fill
+                        unoptimized={r.coverSrc.startsWith("/media/")}
+                        sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+                        className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      />
+                    )}
                   </div>
                   <div className="flex flex-1 flex-col p-4">
                     <h3 className="font-serif text-base font-semibold leading-snug text-rz-navy group-hover:text-rz-maroon">
                       {r.title}
                     </h3>
                     <p className="mt-2 text-xs text-rz-muted">
-                      {r.readTimeMinutes} min read · {formatDate(r.publishedAt)}
+                      {r.readTimeMinutes} min read · {formatDate(r.publishedAt, "short")}
                     </p>
                   </div>
                 </Link>

@@ -17,7 +17,7 @@ export default function RefundPolicyPage() {
         {
           id: "general",
           title: "1. General policy",
-          content: <p>Membership fees are generally non-refundable once a plan has been activated, since access to chat, unlimited interests and advanced search begins immediately upon successful payment verification.</p>,
+          content: <p>Membership fees are generally non-refundable once a plan has been activated, since access to chat and advanced search begins immediately upon successful payment verification.</p>,
         },
         {
           id: "eligible-cases",

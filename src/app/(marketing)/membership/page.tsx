@@ -32,7 +32,7 @@ const BILLING_FAQ = [
   {
     question: "What happens if I don't renew?",
     answer:
-      "Features that need an active membership, such as sending interests and chat, pause until you renew. You can renew or upgrade at any time from your dashboard.",
+      "Features that need an active membership, such as chat, pause until you renew. Sending interests stays free. You can renew or upgrade at any time from your dashboard.",
   },
 ];
 

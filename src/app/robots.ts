@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/site";
 
-const SITE_URL = "https://www.rishteyzindagi.com";
 
 /** Search engines may index the public site; private areas stay out of results (they also require sign-in). */
 export default function robots(): MetadataRoute.Robots {

@@ -34,6 +34,7 @@ import { generateSessionToken, hashSessionToken, sessionExpiryDate } from "@/ser
 import { AuthenticationError, AuthorizationError, ConflictError, ServiceUnavailableError } from "@/server/lib/errors";
 import * as platformSettings from "@/server/modules/platform-settings/platform-settings.service";
 import { record } from "@/server/modules/audit/audit.service";
+import { isPasswordSignInLocked, lockedError, LOCKED_FAILURE_REASON } from "./lockout";
 import { toPublicUser, type PublicUser } from "@/server/modules/users/users.dto";
 import type { UserRow } from "@/server/modules/users/users.repository";
 
@@ -339,6 +340,12 @@ async function recordLoginAttempt(params: {
 const DUMMY_PASSWORD_HASH = "$2a$12$CwTycUXWue0Thq9StjUM0uJ8O9mVeNVCXvEmNXfWFXDLYW.dg7CJ.";
 
 export async function login(input: LoginInput, meta: RequestMeta): Promise<LoginResult | DeviceVerificationRequired> {
+  // S-2: per-account lockout after repeated wrong passwords (see lockout.ts). Checked before the password, recorded
+  // with its own reason so a locked attempt never extends the lock.
+  if (await isPasswordSignInLocked(input.email)) {
+    await recordLoginAttempt({ identifier: input.email, success: false, method: "PASSWORD", failureReason: LOCKED_FAILURE_REASON, meta });
+    throw lockedError();
+  }
   const user = await usersRepo.findByEmail(input.email);
   const valid = await verifyPassword(input.password, user ? user.passwordHash : DUMMY_PASSWORD_HASH);
 

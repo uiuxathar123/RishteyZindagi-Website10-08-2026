@@ -17,7 +17,7 @@ import { CASE_STATUSES } from "./matchmaking.repository";
 
 const meta = (req: NextRequest) => ({ ipAddress: getClientIp(req), userAgent: req.headers.get("user-agent") });
 const uuid = z.string().uuid();
-const ipKey = (req: NextRequest) => req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+const ipKey = (req: NextRequest) => getClientIp(req);
 
 async function tryAuthenticate(req: NextRequest): Promise<AuthContext | null> {
   try {

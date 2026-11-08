@@ -255,7 +255,7 @@ export function MembershipCard() {
           ) : (
             <>
               <p className="font-serif text-base font-semibold text-rz-navy">No active membership</p>
-              <p className="mt-1 text-sm text-rz-muted">A membership is needed to send interests and chat with matches.</p>
+              <p className="mt-1 text-sm text-rz-muted">Sending interests is free. A membership is needed to chat with matches.</p>
             </>
           )}
         </div>

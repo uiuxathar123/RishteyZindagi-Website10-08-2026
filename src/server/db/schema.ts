@@ -1763,6 +1763,39 @@ export const successStories = pgTable(
 );
 
 /**
+ * Blog Manager: articles shown at /blog and /blog/[slug], written in Admin → Blog (`blog.manage`).
+ * `content` is plain text: a blank line starts a new paragraph, a line starting "## " is a sub-heading and lines
+ * starting "- " form a bullet list. It is rendered as text, never as HTML.
+ * The cover is either an uploaded image (`cover_image_id`, stored as `blog/<id>.webp` and served at
+ * /media/blog/<id>) or an external https image URL (`cover_image_url`, e.g. a licensed Pexels photo).
+ */
+export const blogPosts = pgTable(
+  "blog_posts",
+  {
+    id: id(),
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    excerpt: text("excerpt").notNull(),
+    content: text("content").notNull(),
+    category: text("category").notNull(),
+    authorName: text("author_name").notNull(),
+    coverImageId: uuid("cover_image_id"),
+    coverImageUrl: text("cover_image_url"),
+    coverImageAlt: text("cover_image_alt").notNull().default(""),
+    seoTitle: text("seo_title"),
+    seoDescription: text("seo_description"),
+    isPublished: boolean("is_published").notNull().default(false),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdByAdminId: uuid("created_by_admin_id").references(() => adminUsers.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    publishedIdx: index("blog_posts_published_idx").on(t.isPublished, t.publishedAt),
+  })
+);
+
+/**
  * B19: one row per (member, weekly period) so the digest job can never e-mail the same member twice for a period,
  * even when two schedulers overlap. `status` is SENT / EMPTY (nothing to report) / FAILED (SMTP refused; retried next run).
  */

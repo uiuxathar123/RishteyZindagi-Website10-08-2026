@@ -2,6 +2,8 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  // Lets a test render a React component (e.g. the blog article renderer) without importing React.
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     setupFiles: ["./tests/setup.ts"],

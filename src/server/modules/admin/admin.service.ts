@@ -20,6 +20,7 @@ import type { AuthContext } from "@/server/middleware/authenticate";
 import { requireAdminRole } from "@/server/middleware/rbac";
 import * as otpService from "@/server/modules/otp/otp.service";
 import { getAdminSecurity } from "@/server/modules/platform-settings/platform-settings.service";
+import { isPasswordSignInLocked, lockedError, LOCKED_FAILURE_REASON } from "@/server/modules/auth/lockout";
 
 export interface AdminLoginInput {
   email: string;
@@ -103,7 +104,16 @@ async function openAdminSession(row: AdminRow, meta: RequestMeta, extra: Record<
   };
 }
 
+/** S-3: a valid bcrypt hash (cost 12) of a random string, compared against when the e-mail is unknown, so an
+ * unknown admin e-mail costs the same time as a wrong password (same technique as member login, auth.service.ts). */
+const DUMMY_ADMIN_PASSWORD_HASH = "$2a$12$CwTycUXWue0Thq9StjUM0uJ8O9mVeNVCXvEmNXfWFXDLYW.dg7CJ.";
+
 export async function adminLogin(input: AdminLoginInput, meta: RequestMeta): Promise<AdminLoginResult | AdminMfaChallenge> {
+  // S-2: same per-account lockout as member sign-in (auth/lockout.ts).
+  if (await isPasswordSignInLocked(input.email)) {
+    await recordAdminLoginAttempt({ identifier: input.email, success: false, method: "PASSWORD", failureReason: LOCKED_FAILURE_REASON, meta });
+    throw lockedError();
+  }
   const [row] = await db
     .select({ admin: adminUsers, roleName: adminRoles.name })
     .from(adminUsers)
@@ -111,7 +121,8 @@ export async function adminLogin(input: AdminLoginInput, meta: RequestMeta): Pro
     .where(eq(adminUsers.email, input.email))
     .limit(1);
 
-  const valid = row ? await verifyPassword(input.password, row.admin.passwordHash) : false;
+  const passwordMatches = await verifyPassword(input.password, row ? row.admin.passwordHash : DUMMY_ADMIN_PASSWORD_HASH);
+  const valid = Boolean(row) && passwordMatches;
   const failureReason = !row || !valid ? "INVALID_CREDENTIALS" : row.admin.status !== "ACTIVE" ? "ACCOUNT_INACTIVE" : undefined;
 
   await recordAdminLoginAttempt({

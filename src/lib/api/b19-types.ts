@@ -65,6 +65,7 @@ export interface DashboardTrends {
   timezone: string;
   currencies: string[];
   series: Array<{ date: string; signups: number; paymentsSucceeded: number; reportsOpened: number; revenue: Record<string, number> }>;
+  revenueVisible?: boolean;
 }
 
 export interface GroupView {
@@ -109,4 +110,26 @@ export interface AdminGroupMember {
   status: "ACTIVE" | "REMOVED";
   joinedAt: string;
   removedReason: string | null;
+}
+
+/** Admin → Blog (blog.manage). */
+export interface BlogPostRow {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  authorName: string;
+  coverImageId: string | null;
+  coverImageUrl: string | null;
+  coverSrc: string | null;
+  coverImageAlt: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  isPublished: boolean;
+  publishedAt: string | null;
+  readTimeMinutes: number;
+  createdAt: string;
+  updatedAt: string;
 }

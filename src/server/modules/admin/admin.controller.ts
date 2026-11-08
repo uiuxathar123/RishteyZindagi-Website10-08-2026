@@ -5,6 +5,7 @@ import { parseJsonBody } from "@/server/lib/validate";
 import { checkRateLimit } from "@/server/middleware/rate-limit";
 import { ok } from "@/server/lib/response";
 import * as adminService from "./admin.service";
+import { getClientIp } from "@/server/lib/client-ip";
 
 const adminLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -13,7 +14,7 @@ const adminLoginSchema = z.object({
 
 export async function adminLoginHandler(req: NextRequest) {
   const meta = {
-    ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip"),
+    ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   };
   checkRateLimit(`admin-login:${meta.ipAddress ?? "unknown"}`, 10, 60_000);
@@ -29,7 +30,7 @@ const adminMfaSchema = z.object({
 
 export async function adminVerifyMfaHandler(req: NextRequest) {
   const meta = {
-    ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip"),
+    ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   };
   checkRateLimit(`admin-mfa:${meta.ipAddress ?? "unknown"}`, 10, 60_000);

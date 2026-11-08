@@ -104,8 +104,10 @@ describe("PCP central rate-limit policy", () => {
   });
 
   it("[pol-429] admin login is throttled per IP with Retry-After; another IP is unaffected; probes exempt", async () => {
+    // A fresh e-mail per attempt: this test is about the per-IP limit, not the per-account lockout (S-2).
+    let n = 0;
     const attempt = (ip: string) =>
-      adminLogin(jreq("http://localhost/api/v1/admin/login", { body: { email: "nobody@example.com", password: "wrongpassword" }, headers: { "x-forwarded-for": ip } }));
+      adminLogin(jreq("http://localhost/api/v1/admin/login", { body: { email: `nobody-${++n}@example.com`, password: "wrongpassword" }, headers: { "x-forwarded-for": ip } }));
     const statuses: number[] = [];
     for (let i = 0; i < 12; i++) statuses.push((await attempt("203.0.113.9")).status);
     expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(2);

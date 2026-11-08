@@ -4,8 +4,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { UnauthorizedRedirect } from "@/components/session/SessionProvider";
 import { SiteStatusBanner } from "@/components/layout/SiteStatusBanner";
+import { SITE_URL } from "@/lib/site";
 
-const SITE_URL = "https://www.rishteyzindagi.com";
 
 /**
  * Self-hosted static font files (see src/app/fonts/ — pulled from the

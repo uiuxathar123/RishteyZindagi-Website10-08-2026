@@ -115,6 +115,7 @@ export function LoginForm() {
           challenge={verify.challenge}
           destination={verify.challenge.identifier}
           purpose={device ? "NEW_DEVICE" : "LOGIN"}
+          onlyIfAccountExists={!device}
           devIdentifier={verify.challenge.identifier}
           submitLabel={device ? "Verify & log in" : "Log in"}
           onSubmit={async (code) => {

@@ -107,7 +107,7 @@ describe("B6 interactions", () => {
     // --- B8 pre-approved touch regression proof (see BACKEND.md's B8
     // section, "interactions.service.ts membership gate") ------------------
 
-    it("[interest-requires-membership] sending a NEW interest without an active membership is rejected with 403", async () => {
+    it("[interest-free-for-all] (owner decision D-3) a member without an active membership can send a new interest", async () => {
       // Deliberately built via buildReadyProfile directly, NOT
       // twoReadyUsers (which now activates membership for both parties
       // by default — see this file's own note above) — so `a` genuinely
@@ -115,7 +115,7 @@ describe("B6 interactions", () => {
       const a = await buildReadyProfile("int-nomember-a", refs, { gender: "FEMALE" });
       const b = await buildReadyProfile("int-nomember-b", refs, { gender: "MALE" });
       const res = await sendInterest(ireq("http://localhost/api/v1/interactions/interests", { toUserId: b.member.userId }, a.member.sessionToken));
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it("[interest-received-still-actionable-without-membership] a received interest can still be accepted/rejected even without an active membership", async () => {

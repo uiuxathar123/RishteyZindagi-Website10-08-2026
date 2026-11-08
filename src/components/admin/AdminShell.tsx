@@ -29,6 +29,7 @@ import {
   Inbox,
   Heart,
   MessagesSquare,
+  Newspaper,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -49,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/visibility-queue", label: "Visibility Queue", icon: ShieldCheck, needs: ["profiles.approve"] },
   { href: "/admin/inbox", label: "Support Inbox", icon: Inbox, needs: ["support.manage"] },
   { href: "/admin/stories", label: "Success Stories", icon: Heart, needs: ["content.manage"] },
+  { href: "/admin/blog", label: "Blog", icon: Newspaper, needs: ["blog.manage"] },
   { href: "/admin/groups", label: "Community Groups", icon: MessagesSquare, needs: ["groups.manage"] },
   { href: "/admin/reports", label: "Reports", icon: Flag, needs: ["reports.resolve"] },
   { href: "/admin/account-deletions", label: "Account Deletions", icon: UserX, needs: ["users.view"] },

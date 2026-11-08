@@ -143,3 +143,36 @@ describe("delegated screens' APIs", () => {
     expect((await listPlans(jreq(`${U}/membership-plans`, { token: staff.token }))).status).toBe(403);
   });
 });
+
+describe("revenue visibility (owner decision D-4)", () => {
+  it("[rev-super-only] Staff Admins get every count but no money figures; Super Admin and staff granted payments.review see revenue", async () => {
+    const sup = await createAdmin("SUPER_ADMIN");
+    const staff = await createAdmin("STAFF_ADMIN");
+    const a = await createVerifiedMember("rev-a");
+    const c = await checkout(req(`${U.replace("/admin", "")}/memberships/checkout`, { planCode: "PLAN_MONTHLY_INR", devSimulateOutcome: "SUCCESS" }, { token: a.sessionToken, method: "POST" }));
+    const cd = (await c.json()).data;
+    await verifyPayment(req(`${U.replace("/admin", "")}/payments/${cd.paymentId}/verify`, {}, { token: a.sessionToken, method: "POST" }), { params: { paymentId: cd.paymentId } });
+
+    const supStats = (await (await getDashboard(jreq(`${U}/dashboard`, { token: sup.token }))).json()).data.stats;
+    expect(supStats.payments.revenueVisible).toBe(true);
+    expect(supStats.payments.revenueByCurrency.length).toBeGreaterThan(0);
+    const supTrends = (await (await trends(sup.token)).json()).data;
+    expect(supTrends.revenueVisible).toBe(true);
+    expect(supTrends.currencies).toContain("INR");
+
+    const staffStats = (await (await getDashboard(jreq(`${U}/dashboard`, { token: staff.token }))).json()).data.stats;
+    expect(staffStats.payments.revenueVisible).toBe(false);
+    expect(staffStats.payments.revenueByCurrency).toEqual([]);
+    expect(staffStats.payments.successful).toBe(supStats.payments.successful); // counts are still shown
+    const staffTrends = (await (await trends(staff.token)).json()).data;
+    expect(staffTrends.revenueVisible).toBe(false);
+    expect(staffTrends.currencies).toEqual([]);
+    expect(staffTrends.series.every((d: { revenue: Record<string, number> }) => Object.keys(d.revenue).length === 0)).toBe(true);
+
+    await grantPermission("STAFF_ADMIN", "payments.review");
+    const granted = (await (await getDashboard(jreq(`${U}/dashboard`, { token: staff.token }))).json()).data.stats;
+    expect(granted.payments.revenueVisible).toBe(true);
+    expect(granted.payments.revenueByCurrency.length).toBeGreaterThan(0);
+    await revokePermission("STAFF_ADMIN", "payments.review");
+  });
+});

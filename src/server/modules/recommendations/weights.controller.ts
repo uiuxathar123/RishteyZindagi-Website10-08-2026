@@ -9,10 +9,11 @@ import { parseJsonBody } from "@/server/lib/validate";
 import { checkRateLimit } from "@/server/middleware/rate-limit";
 import { ok } from "@/server/lib/response";
 import * as weightsService from "./weights.service";
+import { getClientIp } from "@/server/lib/client-ip";
 
 function requestMeta(req: NextRequest) {
   return {
-    ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip"),
+    ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   };
 }

@@ -110,6 +110,7 @@ export function ResetPasswordFlow({
         challenge={challenge}
         destination={email}
         purpose="FORGOT_PASSWORD"
+        onlyIfAccountExists
         devIdentifier={email}
         submitLabel="Reset password"
         onSubmit={reset}

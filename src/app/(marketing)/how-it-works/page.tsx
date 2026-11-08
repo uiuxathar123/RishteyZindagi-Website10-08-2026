@@ -61,7 +61,7 @@ const STEPS = [
 const FAQ = [
   { question: "How long does verification take?", answer: "Most profiles are reviewed within 24–48 hours of submission." },
   { question: "Can I change my partner preferences later?", answer: "Yes, at any time from Settings → Partner Preferences — your recommendations update immediately." },
-  { question: "Do I need a paid membership to see matches?", answer: "No — recommendations and match percentages are visible on a free profile. A membership is needed to chat and send unlimited interests." },
+  { question: "Do I need a paid membership to see matches?", answer: "No — recommendations and match percentages are visible on a free profile. Sending interests is free; a membership is needed to chat." },
 ];
 
 export default function HowItWorksPage() {

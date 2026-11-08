@@ -64,7 +64,7 @@ export function CurrentMembershipCard({
             <div>
               <p className="font-serif text-base font-semibold text-rz-navy">No active membership</p>
               <p className="mt-1 text-sm text-rz-muted">
-                You&apos;re on the free tier. A membership unlocks sending interests and chat.
+                You&apos;re on the free tier. Sending interests is free. A membership unlocks chat.
               </p>
             </div>
           </div>
@@ -122,7 +122,7 @@ export function CurrentMembershipCard({
 
       {!isActive && (
         <p className="mt-4 rounded-md bg-rz-peach/50 p-3 text-xs leading-relaxed text-rz-text">
-          Your membership is no longer active, so features that need one (such as sending interests and chat) are paused.
+          Your membership is no longer active, so features that need one (such as chat) are paused. Sending interests stays free.
           Renew or choose a plan below to continue.
         </p>
       )}

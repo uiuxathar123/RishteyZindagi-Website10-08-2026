@@ -6,6 +6,7 @@ import { ValidationError } from "@/server/lib/errors";
 import { ok } from "@/server/lib/response";
 import { checkRateLimit } from "@/server/middleware/rate-limit";
 import * as searchService from "./search.service";
+import { getClientIp } from "@/server/lib/client-ip";
 
 /** Soft authentication — search must work for both signed-in and
  * anonymous callers (§13/§14), same pattern as
@@ -21,7 +22,7 @@ async function tryAuthenticate(req: NextRequest): Promise<AuthContext | null> {
 }
 
 function ipKey(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+  return getClientIp(req);
 }
 
 const uuidField = z.string().uuid();

@@ -8,6 +8,7 @@ import * as authService from "./auth.service";
 import type { RequestMeta } from "./auth.service";
 import * as otpService from "@/server/modules/otp/otp.service";
 import { record } from "@/server/modules/audit/audit.service";
+import { getClientIp } from "@/server/lib/client-ip";
 
 /** PCP security review: the client-supplied device id is stored and audited, so only a short,
  * boring token is accepted (anything else is treated as "no device id"). */
@@ -18,7 +19,7 @@ export function sanitizeDeviceId(value: string | null): string | null {
 
 function requestMeta(req: NextRequest): RequestMeta {
   return {
-    ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip"),
+    ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
     deviceId: sanitizeDeviceId(req.headers.get("x-device-id")),
   };
