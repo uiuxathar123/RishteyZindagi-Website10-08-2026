@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Container, Section } from "@/components/ui/Container";
 import { Badge } from "@/components/ui/Badge";
 import { BlogContent } from "@/components/blog/BlogContent";
-import { getPublishedPost, listRelatedPosts, type BlogPostView } from "@/server/modules/blog/blog.service";
+import { getPublishedPost, listPublishedPosts, listRelatedPosts, type BlogPostView } from "@/server/modules/blog/blog.service";
 import { CalendarDays, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -13,6 +13,16 @@ import { SITE_URL } from "@/lib/site";
 // Cached for 60 s (load test 2026-11-09: rendering this page on every request cost ~1.6 s at 500 users);
 // admin edits refresh it immediately via refreshPublicPages (src/server/lib/revalidate.ts).
 export const revalidate = 60;
+
+/** Published articles are pre-rendered at build time; any other slug (an article published later) is rendered on
+ * its first visit and then cached like the rest. Without this list Next.js renders the route on every request. */
+export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
+  try {
+    return (await listPublishedPosts()).map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
+}
 
 interface BlogPostPageProps {
   params: { slug: string };
