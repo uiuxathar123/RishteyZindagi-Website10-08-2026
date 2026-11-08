@@ -22,6 +22,7 @@ import { record } from "@/server/modules/audit/audit.service";
 import { getStorageProvider } from "@/server/modules/storage/factory";
 import { inspectImage } from "@/server/modules/storage/image-inspect";
 import { convertPhotoToWebp } from "@/server/modules/storage/photo-convert";
+import { refreshPublicPages } from "@/server/lib/revalidate";
 
 export const BLOG_PERMISSION = "blog.manage";
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
@@ -199,6 +200,7 @@ export async function createPost(ctx: AuthContext, input: unknown, meta: Meta): 
     throw err;
   }
   await record({ actorType: "ADMIN", actorId: ctx.subject.id, actorRole: ctx.adminRoleName, action: "blog.post_created", entityType: "blog_post", entityId: row.id, ipAddress: meta.ipAddress, userAgent: meta.userAgent, metadata: { slug: row.slug, isPublished: row.isPublished } });
+  refreshPublicPages({ path: "/blog", type: "layout" });
   return toView(row);
 }
 
@@ -226,6 +228,7 @@ export async function updatePost(ctx: AuthContext, id: string, input: unknown, m
   // An uploaded cover that was replaced or removed is deleted from storage (best effort).
   if (existing.coverImageId && existing.coverImageId !== row.coverImageId) await deleteImageQuietly(existing.coverImageId);
   await record({ actorType: "ADMIN", actorId: ctx.subject.id, actorRole: ctx.adminRoleName, action: "blog.post_updated", entityType: "blog_post", entityId: id, ipAddress: meta.ipAddress, userAgent: meta.userAgent, metadata: { slug: row.slug, wasPublished: existing.isPublished, isPublished: row.isPublished, fields: Object.keys(d) } });
+  refreshPublicPages({ path: "/blog", type: "layout" });
   return toView(row);
 }
 
@@ -235,6 +238,7 @@ export async function deletePost(ctx: AuthContext, id: string, meta: Meta): Prom
   if (!deleted) throw new NotFoundError("Article not found.");
   if (deleted.coverImageId) await deleteImageQuietly(deleted.coverImageId);
   await record({ actorType: "ADMIN", actorId: ctx.subject.id, actorRole: ctx.adminRoleName, action: "blog.post_deleted", entityType: "blog_post", entityId: id, ipAddress: meta.ipAddress, userAgent: meta.userAgent, metadata: { slug: deleted.slug, title: deleted.title } });
+  refreshPublicPages({ path: "/blog", type: "layout" });
 }
 
 export async function uploadCoverImage(ctx: AuthContext, buffer: Buffer, meta: Meta): Promise<{ imageId: string; url: string; width: number; height: number }> {

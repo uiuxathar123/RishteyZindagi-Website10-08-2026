@@ -8,6 +8,7 @@
  *  - Success stories (`content.manage`): a story can be published only after the admin confirms the couple's consent;
  *    the public endpoint returns published stories only (no e-mail, no ids beyond the story id).
  */
+import { refreshPublicPages } from "@/server/lib/revalidate";
 import { createHmac } from "crypto";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -231,6 +232,7 @@ export async function createStory(ctx: AuthContext, input: unknown, meta: Meta):
   assertPublishable(parsed.data);
   const [row] = await db.insert(successStories).values({ ...parsed.data, createdByAdminId: ctx.subject.id }).returning();
   await record({ actorType: "ADMIN", actorId: ctx.subject.id, actorRole: ctx.adminRoleName, action: "story.created", entityType: "success_story", entityId: row.id, ipAddress: meta.ipAddress, userAgent: meta.userAgent, metadata: { isPublished: row.isPublished } });
+  refreshPublicPages({ path: "/success-stories" });
   return toStoryView(row);
 }
 
@@ -243,6 +245,7 @@ export async function updateStory(ctx: AuthContext, id: string, input: unknown, 
   assertPublishable({ isPublished: parsed.data.isPublished ?? existing.isPublished, consentConfirmed: parsed.data.consentConfirmed ?? existing.consentConfirmed });
   const [row] = await db.update(successStories).set({ ...parsed.data, updatedAt: new Date() }).where(eq(successStories.id, id)).returning();
   await record({ actorType: "ADMIN", actorId: ctx.subject.id, actorRole: ctx.adminRoleName, action: "story.updated", entityType: "success_story", entityId: id, ipAddress: meta.ipAddress, userAgent: meta.userAgent, metadata: { wasPublished: existing.isPublished, isPublished: row.isPublished, fields: Object.keys(parsed.data) } });
+  refreshPublicPages({ path: "/success-stories" });
   return toStoryView(row);
 }
 
@@ -251,4 +254,5 @@ export async function deleteStory(ctx: AuthContext, id: string, meta: Meta): Pro
   const deleted = await db.delete(successStories).where(eq(successStories.id, id)).returning({ id: successStories.id });
   if (deleted.length === 0) throw new NotFoundError("Story not found.");
   await record({ actorType: "ADMIN", actorId: ctx.subject.id, actorRole: ctx.adminRoleName, action: "story.deleted", entityType: "success_story", entityId: id, ipAddress: meta.ipAddress, userAgent: meta.userAgent });
+  refreshPublicPages({ path: "/success-stories" });
 }

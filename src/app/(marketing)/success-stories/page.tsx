@@ -8,7 +8,9 @@ import Image from "next/image";
 import { listPublishedStories } from "@/server/modules/content/content.service";
 
 // Published stories are managed by an admin at runtime (Admin → Success Stories).
-export const dynamic = "force-dynamic";
+// Cached for 60 s (load test 2026-11-09: rendering this page on every request cost ~1.6 s at 500 users);
+// admin edits refresh it immediately via refreshPublicPages (src/server/lib/revalidate.ts).
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Success Stories",

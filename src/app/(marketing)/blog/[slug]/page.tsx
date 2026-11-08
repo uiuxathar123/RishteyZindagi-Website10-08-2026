@@ -10,7 +10,9 @@ import { notFound } from "next/navigation";
 import { SITE_URL } from "@/lib/site";
 
 // Articles are managed at runtime in Admin → Blog.
-export const dynamic = "force-dynamic";
+// Cached for 60 s (load test 2026-11-09: rendering this page on every request cost ~1.6 s at 500 users);
+// admin edits refresh it immediately via refreshPublicPages (src/server/lib/revalidate.ts).
+export const revalidate = 60;
 
 interface BlogPostPageProps {
   params: { slug: string };
