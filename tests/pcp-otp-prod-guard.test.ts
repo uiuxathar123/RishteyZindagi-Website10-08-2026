@@ -26,7 +26,6 @@ describe("OTP provider — production rules", () => {
     vi.stubEnv("FAST2SMS_OTP_ID", "");
     vi.stubEnv("WHATSAPP_API_KEY", "");
     const svc = await import("@/server/modules/otp/otp-provider.service");
-    await expect(svc.setActiveOtpProvider(ctx as never, "FAST2SMS_SMS", {})).rejects.toMatchObject({ statusCode: 409 });
     await expect(svc.setActiveOtpProvider(ctx as never, "META_WHATSAPP", {})).rejects.toMatchObject({ statusCode: 409 });
     await expect(svc.setActiveOtpProvider(ctx as never, "EMAIL", {})).rejects.toMatchObject({ statusCode: 409 });
     expect((await db.select().from(otpConfigs).where(eq(otpConfigs.id, 1)))[0].activeMethod).toBe("EMAIL");
@@ -39,11 +38,12 @@ describe("OTP provider — production rules", () => {
     const ctx = { subject: { id: admin.id, type: "admin" as const }, adminRoleName: "SUPER_ADMIN", sessionId: "t" };
     vi.resetModules();
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("FAST2SMS_API_KEY", "key-abcdefghijk");
-    vi.stubEnv("FAST2SMS_OTP_ID", "tmpl-1");
+    vi.stubEnv("WHATSAPP_API_KEY", "token-abcdefghijk");
+    vi.stubEnv("WHATSAPP_PHONE_NUMBER_ID", "123");
+    vi.stubEnv("WHATSAPP_OTP_TEMPLATE_NAME", "rz_otp");
     const svc = await import("@/server/modules/otp/otp-provider.service");
-    const view = await svc.setActiveOtpProvider(ctx as never, "FAST2SMS_SMS", {});
-    expect(view.activeProvider).toBe("FAST2SMS_SMS");
+    const view = await svc.setActiveOtpProvider(ctx as never, "META_WHATSAPP", {});
+    expect(view.activeProvider).toBe("META_WHATSAPP");
     expect(view.providers.find((p) => p.key === "EMAIL")!.missing).toEqual(expect.arrayContaining(["SMTP_HOST"]));
   });
 });

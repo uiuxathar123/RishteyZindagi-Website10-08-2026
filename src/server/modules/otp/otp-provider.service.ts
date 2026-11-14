@@ -31,8 +31,10 @@ import type { OtpMethod } from "./otp.types";
 
 const PERMISSION = "platform.settings.manage";
 
+/** Selectable in the Admin Panel: e-mail or WhatsApp — exactly one active at a time.
+ * FAST2SMS_SMS stays a known key (the SMS adapter still exists) but is no longer offered. */
 export type OtpProviderKey = "EMAIL" | "FAST2SMS_SMS" | "META_WHATSAPP";
-export const OTP_PROVIDER_KEYS: readonly OtpProviderKey[] = ["EMAIL", "META_WHATSAPP", "FAST2SMS_SMS"];
+export const OTP_PROVIDER_KEYS: readonly OtpProviderKey[] = ["EMAIL", "META_WHATSAPP"];
 
 const METHOD_BY_KEY: Record<OtpProviderKey, OtpMethod> = { EMAIL: "EMAIL", FAST2SMS_SMS: "SMS", META_WHATSAPP: "WHATSAPP" };
 const LABEL: Record<OtpProviderKey, string> = { EMAIL: "E-mail (SMTP)", FAST2SMS_SMS: "SMS (Fast2SMS)", META_WHATSAPP: "WhatsApp (Meta Cloud API)" };

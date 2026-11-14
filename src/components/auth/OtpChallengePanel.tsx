@@ -42,7 +42,7 @@ export function channelPhrase(channel: OtpChallenge["channel"] | string): string
     case "SMS":
       return "mobile number by SMS";
     case "WHATSAPP":
-      return "WhatsApp number";
+      return "WhatsApp number (or e-mail, if WhatsApp could not deliver it)";
     default:
       return "registered contact";
   }

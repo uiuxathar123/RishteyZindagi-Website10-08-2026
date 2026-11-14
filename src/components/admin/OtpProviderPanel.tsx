@@ -56,7 +56,7 @@ function ProviderBody({ view, onChanged }: { view: OtpProviderView; onChanged: (
       {view.unsupportedActiveMethod && (
         <p role="alert" className="flex items-start gap-2 rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>The stored method “{view.unsupportedActiveMethod}” is no longer supported. Choose Email or Fast2SMS below.</span>
+          <span>The stored method “{view.unsupportedActiveMethod}” is no longer supported. Choose Email or WhatsApp below.</span>
         </p>
       )}
       {view.devMode && (
@@ -64,6 +64,7 @@ function ProviderBody({ view, onChanged }: { view: OtpProviderView; onChanged: (
           Development mode is on: codes are not delivered externally. It can only exist outside production.
         </p>
       )}
+      <p className="text-[13px] text-rz-navy">Only one OTP channel is active at a time. Switching to one automatically deactivates the other; codes already sent stay valid until they expire.</p>
       <div role="radiogroup" aria-label="OTP delivery provider" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {view.providers.map((p) => {
           const Icon = ICON[p.key];

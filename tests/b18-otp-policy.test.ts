@@ -114,10 +114,10 @@ describe("policy API — defaults, authorization, validation", () => {
     await setPolicy(sup.token, "NEW_DEVICE_LOGIN", "OTP_NOT_REQUIRED", "testing separation");
     const [cfg1] = await db.select().from(otpConfigs);
     expect(cfg1.activeMethod).toBe("EMAIL");
-    const sw = await patchProvider(jreq(`${URL_}/admin/otp/provider`, { method: "PATCH", body: { activeProvider: "FAST2SMS_SMS" }, token: sup.token }));
+    const sw = await patchProvider(jreq(`${URL_}/admin/otp/provider`, { method: "PATCH", body: { activeProvider: "META_WHATSAPP" }, token: sup.token }));
     expect(sw.status).toBe(200);
     const [cfg2] = await db.select().from(otpConfigs);
-    expect(cfg2.activeMethod).toBe("SMS"); // exactly one active
+    expect(cfg2.activeMethod).toBe("WHATSAPP"); // exactly one active
     const view = (await (await getPolicy(jreq(`${URL_}/admin/otp/policy`, { token: sup.token }))).json()).data;
     expect(view.policy.NEW_DEVICE_LOGIN).toBe("OTP_NOT_REQUIRED");
     expect(cfg2.enabled).toBe(true);

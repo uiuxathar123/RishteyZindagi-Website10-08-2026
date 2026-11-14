@@ -7,7 +7,7 @@ import { ok } from "@/server/lib/response";
 import { getClientIp } from "@/server/lib/client-ip";
 import * as svc from "./otp-provider.service";
 
-const bodySchema = z.object({ activeProvider: z.enum(["EMAIL", "FAST2SMS_SMS", "META_WHATSAPP"]) }).strict();
+const bodySchema = z.object({ activeProvider: z.enum(["EMAIL", "META_WHATSAPP"]) }).strict();
 
 export async function getOtpProviderHandler(req: NextRequest) {
   const ctx = await authenticate(req);

@@ -1,5 +1,5 @@
 /**
- * Production Completion Phase — OTP providers (EMAIL via SMTP, FAST2SMS_SMS) and
+ * Production Completion Phase â€” OTP providers (EMAIL via SMTP, FAST2SMS_SMS) and
  * the admin provider switch. Real adapters run against a real local SMTP server
  * and a Fast2SMS contract mock (tests/helpers/mock-otp.ts). Live-vendor
  * acceptance of production credentials is NOT verified here.
@@ -90,7 +90,7 @@ describe("admin OTP provider API", () => {
     expect((await getProvider(jreq("http://localhost/api/v1/admin/otp/provider"))).status).toBe(401);
     const staff = await createAdmin("STAFF_ADMIN");
     expect((await getProvider(jreq("http://localhost/api/v1/admin/otp/provider", { token: staff.token }))).status).toBe(403);
-    expect((await setProvider("FAST2SMS_SMS", staff.token)).status).toBe(403);
+    expect((await setProvider("META_WHATSAPP", staff.token)).status).toBe(403);
 
     const res = await getProvider(jreq("http://localhost/api/v1/admin/otp/provider", { token: admin.token }));
     expect(res.status).toBe(200);
@@ -98,29 +98,31 @@ describe("admin OTP provider API", () => {
     for (const secret of [F2S_KEY, "smtp-pass-secret-xyz", "otp-template-1"]) expect(text).not.toContain(secret);
     const view = JSON.parse(text).data;
     expect(view.activeProvider).toBe("EMAIL");
-    expect(view.providers.map((p: { key: string }) => p.key)).toEqual(["EMAIL", "META_WHATSAPP", "FAST2SMS_SMS"]);
-    expect(view.providers.filter((p: { key: string }) => p.key !== "META_WHATSAPP").every((p: { configured: boolean }) => p.configured)).toBe(true);
+    expect(view.providers.map((p: { key: string }) => p.key)).toEqual(["EMAIL", "META_WHATSAPP"]);
+    expect(view.providers.find((p: { key: string }) => p.key === "EMAIL").configured).toBe(true);
   });
 
   it("[otp-admin-switch] switching is atomic, audited, exactly one active; invalid values rejected", async () => {
-    const res = await setProvider("FAST2SMS_SMS");
+    const res = await setProvider("META_WHATSAPP");
     expect(res.status).toBe(200);
-    expect((await res.json()).data.activeProvider).toBe("FAST2SMS_SMS");
-    expect((await db.select().from(otpConfigs))[0].activeMethod).toBe("SMS");
+    const v = (await res.json()).data;
+    expect(v.activeProvider).toBe("META_WHATSAPP");
+    expect(v.providers.filter((p: { active: boolean }) => p.active).map((p: { key: string }) => p.key)).toEqual(["META_WHATSAPP"]);
+    expect((await db.select().from(otpConfigs))[0].activeMethod).toBe("WHATSAPP");
     expect((await setProvider("EMAIL")).status).toBe(200);
     expect((await db.select().from(otpConfigs))[0].activeMethod).toBe("EMAIL");
 
-    for (const bad of ["WHATSAPP", "SMS", "sendgrid", 5, null]) expect((await setProvider(bad)).status).toBe(400);
+    for (const bad of ["WHATSAPP", "SMS", "FAST2SMS_SMS", "sendgrid", 5, null]) expect((await setProvider(bad)).status).toBe(400);
     const extra = await patchProvider(jreq("http://localhost/api/v1/admin/otp/provider", { method: "PATCH", body: { activeProvider: "EMAIL", x: 1 }, token: admin.token }));
     expect(extra.status).toBe(400);
 
     const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, "otp_config.provider_switched"));
     expect(logs.length).toBe(2);
-    expect(JSON.stringify(logs)).toContain("FAST2SMS_SMS");
+    expect(JSON.stringify(logs)).toContain("META_WHATSAPP");
 
-    const results = await Promise.all(["EMAIL", "FAST2SMS_SMS", "EMAIL", "FAST2SMS_SMS", "FAST2SMS_SMS"].map((k) => setProvider(k)));
+    const results = await Promise.all(["EMAIL", "META_WHATSAPP", "EMAIL", "META_WHATSAPP", "META_WHATSAPP"].map((k) => setProvider(k)));
     expect(results.every((r) => r.status === 200)).toBe(true);
-    expect(["EMAIL", "SMS"]).toContain((await db.select().from(otpConfigs))[0].activeMethod);
+    expect(["EMAIL", "WHATSAPP"]).toContain((await db.select().from(otpConfigs))[0].activeMethod);
   });
 });
 
@@ -143,7 +145,7 @@ describe("EMAIL provider (real SMTP)", () => {
     expect((await doVerify(body.email as string, code)).res.status).toBe(401);
   });
 
-  it("[otp-email-failure] SMTP rejection → 503, no OTP row, no leak of code or SMTP password", async () => {
+  it("[otp-email-failure] SMTP rejection â†’ 503, no OTP row, no leak of code or SMTP password", async () => {
     await realDelivery("EMAIL");
     smtp.rejectNext = true;
     const logs: string[] = [];
@@ -204,7 +206,7 @@ describe("FAST2SMS_SMS provider (Fast2SMS contract mock)", () => {
     expect(ok.status).toBe(200);
   });
 
-  it("[otp-sms-failures] 401 / 500 from the vendor → 503, no OTP row, no secret or code in the response or logs", async () => {
+  it("[otp-sms-failures] 401 / 500 from the vendor â†’ 503, no OTP row, no secret or code in the response or logs", async () => {
     await realDelivery("SMS");
     const logs: string[] = [];
     vi.spyOn(console, "log").mockImplementation((...a) => void logs.push(a.join(" ")));
@@ -248,7 +250,7 @@ describe("switching providers with codes in flight", () => {
     const body = newSignup();
     await doRegister(body);
     const code = codeFromMail(smtp.mails[0].text);
-    expect((await setProvider("FAST2SMS_SMS")).status).toBe(200);
+    await realDelivery("SMS");
     expect((await doVerify(body.email as string, code)).res.status).toBe(200);
   });
 
@@ -265,7 +267,7 @@ describe("switching providers with codes in flight", () => {
     await realDelivery("EMAIL");
     await doRegister(newSignup());
     const before = await db.select().from(otps);
-    await setProvider("FAST2SMS_SMS");
+    await realDelivery("SMS");
     await setProvider("EMAIL");
     const after = await db.select().from(otps);
     expect(after).toEqual(before);
@@ -277,7 +279,7 @@ describe("switching providers with codes in flight", () => {
     const body = newSignup();
     await doRegister(body);
     expect(smtp.mails).toHaveLength(1);
-    await setProvider("FAST2SMS_SMS");
+    await realDelivery("SMS");
     const res = await resendOtp(req("http://localhost/api/v1/auth/resend-otp", { identifier: body.email, purpose: "SIGNUP" }));
     expect(res.status).toBe(200);
     expect(sms.calls).toHaveLength(1);
