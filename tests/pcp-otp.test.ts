@@ -98,8 +98,8 @@ describe("admin OTP provider API", () => {
     for (const secret of [F2S_KEY, "smtp-pass-secret-xyz", "otp-template-1"]) expect(text).not.toContain(secret);
     const view = JSON.parse(text).data;
     expect(view.activeProvider).toBe("EMAIL");
-    expect(view.providers.map((p: { key: string }) => p.key)).toEqual(["EMAIL", "FAST2SMS_SMS"]);
-    expect(view.providers.every((p: { configured: boolean }) => p.configured)).toBe(true);
+    expect(view.providers.map((p: { key: string }) => p.key)).toEqual(["EMAIL", "META_WHATSAPP", "FAST2SMS_SMS"]);
+    expect(view.providers.filter((p: { key: string }) => p.key !== "META_WHATSAPP").every((p: { configured: boolean }) => p.configured)).toBe(true);
   });
 
   it("[otp-admin-switch] switching is atomic, audited, exactly one active; invalid values rejected", async () => {

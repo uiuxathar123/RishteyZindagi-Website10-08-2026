@@ -24,8 +24,10 @@ describe("OTP provider — production rules", () => {
     vi.stubEnv("SMTP_HOST", "");
     vi.stubEnv("FAST2SMS_API_KEY", "");
     vi.stubEnv("FAST2SMS_OTP_ID", "");
+    vi.stubEnv("WHATSAPP_API_KEY", "");
     const svc = await import("@/server/modules/otp/otp-provider.service");
     await expect(svc.setActiveOtpProvider(ctx as never, "FAST2SMS_SMS", {})).rejects.toMatchObject({ statusCode: 409 });
+    await expect(svc.setActiveOtpProvider(ctx as never, "META_WHATSAPP", {})).rejects.toMatchObject({ statusCode: 409 });
     await expect(svc.setActiveOtpProvider(ctx as never, "EMAIL", {})).rejects.toMatchObject({ statusCode: 409 });
     expect((await db.select().from(otpConfigs).where(eq(otpConfigs.id, 1)))[0].activeMethod).toBe("EMAIL");
     const legacy = await import("@/server/modules/otp/otp-config.service");

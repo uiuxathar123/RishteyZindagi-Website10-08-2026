@@ -30,6 +30,9 @@ export interface OtpSendParams {
   /** How many seconds until this code expires — providers that template
    * their message (e.g. "expires in 5 minutes") may use this. */
   expirySeconds: number;
+  /** Pending e-mail for a SIGNUP that has no users row yet (from the request metadata) — lets a
+   * provider deliver/fall back to e-mail before the OTP row exists. Delivery address only. */
+  contactEmail?: string;
 }
 
 export interface OtpProvider {

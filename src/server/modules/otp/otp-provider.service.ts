@@ -16,8 +16,7 @@
  *    NAMES are missing, never a value.
  *  - API value `FAST2SMS_SMS` is stored as the existing enum value `SMS`
  *    (no enum change, so existing rows and the frozen schema are untouched).
- *  - WHATSAPP remains in the legacy enum but is not a selectable provider here
- *    and is rejected by the legacy endpoint in production.
+ *  - API value `META_WHATSAPP` is stored as the existing enum value `WHATSAPP`.
  */
 import { getEnv } from "@/server/config/env";
 import { ConflictError } from "@/server/lib/errors";
@@ -27,15 +26,16 @@ import type { AuthContext } from "@/server/middleware/authenticate";
 import { requirePermission } from "@/server/middleware/rbac";
 import * as otpConfigRepo from "./otp-config.repository";
 import { SmsOtpProvider } from "./providers/sms.provider";
+import { WhatsAppOtpProvider } from "./providers/whatsapp.provider";
 import type { OtpMethod } from "./otp.types";
 
 const PERMISSION = "platform.settings.manage";
 
-export type OtpProviderKey = "EMAIL" | "FAST2SMS_SMS";
-export const OTP_PROVIDER_KEYS: readonly OtpProviderKey[] = ["EMAIL", "FAST2SMS_SMS"];
+export type OtpProviderKey = "EMAIL" | "FAST2SMS_SMS" | "META_WHATSAPP";
+export const OTP_PROVIDER_KEYS: readonly OtpProviderKey[] = ["EMAIL", "META_WHATSAPP", "FAST2SMS_SMS"];
 
-const METHOD_BY_KEY: Record<OtpProviderKey, OtpMethod> = { EMAIL: "EMAIL", FAST2SMS_SMS: "SMS" };
-const LABEL: Record<OtpProviderKey, string> = { EMAIL: "E-mail (SMTP)", FAST2SMS_SMS: "SMS (Fast2SMS)" };
+const METHOD_BY_KEY: Record<OtpProviderKey, OtpMethod> = { EMAIL: "EMAIL", FAST2SMS_SMS: "SMS", META_WHATSAPP: "WHATSAPP" };
+const LABEL: Record<OtpProviderKey, string> = { EMAIL: "E-mail (SMTP)", FAST2SMS_SMS: "SMS (Fast2SMS)", META_WHATSAPP: "WhatsApp (Meta Cloud API)" };
 
 export interface OtpProviderStatus {
   key: OtpProviderKey;
@@ -62,6 +62,10 @@ function status(key: OtpProviderKey, activeMethod: OtpMethod): OtpProviderStatus
   if (key === "EMAIL") {
     const missing = missingMailerSettings();
     return { key, label: LABEL[key], method: "EMAIL", active: activeMethod === "EMAIL", configured: isMailerConfigured(), missing };
+  }
+  if (key === "META_WHATSAPP") {
+    const wa = new WhatsAppOtpProvider();
+    return { key, label: LABEL[key], method: "WHATSAPP", active: activeMethod === "WHATSAPP", configured: wa.isConfigured(), missing: wa.missingSettings() };
   }
   const sms = new SmsOtpProvider();
   return { key, label: LABEL[key], method: "SMS", active: activeMethod === "SMS", configured: sms.isConfigured(), missing: sms.missingSettings() };
@@ -109,7 +113,7 @@ export async function setActiveOtpProvider(
     entityType: "otp_config",
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
-    metadata: { from: before.activeMethod === "SMS" ? "FAST2SMS_SMS" : before.activeMethod, to: key, targetConfigured: target.configured },
+    metadata: { from: before.activeMethod === "SMS" ? "FAST2SMS_SMS" : before.activeMethod === "WHATSAPP" ? "META_WHATSAPP" : before.activeMethod, to: key, targetConfigured: target.configured },
   });
   void updated;
   return buildView();

@@ -27,7 +27,7 @@ export interface PaymentConfigView {
   devGatewayInUse: boolean;
 }
 
-export type OtpProviderKey = "EMAIL" | "FAST2SMS_SMS";
+export type OtpProviderKey = "EMAIL" | "FAST2SMS_SMS" | "META_WHATSAPP";
 
 export interface OtpProviderStatus {
   key: OtpProviderKey;

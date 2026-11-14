@@ -32,6 +32,7 @@ export class EmailOtpProvider implements OtpProvider {
       throw new ServiceUnavailableError(`Email OTP delivery is not configured. Set ${missingMailerSettings().join(" and ")}.`);
     }
     const dest = await resolveOtpDestination(params.to, params.purpose);
+    if (!dest.email && params.contactEmail) dest.email = params.contactEmail.toLowerCase();
     if (!dest.email) throw new ServiceUnavailableError("No e-mail address is available to deliver this code to.");
     const minutes = Math.max(1, Math.round(params.expirySeconds / 60));
     const what = PURPOSE_LABEL[params.purpose] ?? "continue";

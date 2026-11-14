@@ -14,6 +14,7 @@
  * constraint can't (dev mode can never be enabled in production), and
  * audit-log every change.
  */
+import { WhatsAppOtpProvider } from "./providers/whatsapp.provider";
 import { getEnv } from "@/server/config/env";
 import { ValidationError } from "@/server/lib/errors";
 import { record } from "@/server/modules/audit/audit.service";
@@ -82,9 +83,8 @@ export async function updateConfig(
   if (input.devMode === true && getEnv().NODE_ENV === "production") {
     throw new ValidationError("Dev OTP mode cannot be enabled in production.");
   }
-  // PCP: WhatsApp OTP delivery has no real implementation; the supported providers are EMAIL and SMS (Fast2SMS).
-  if (input.activeMethod === "WHATSAPP" && getEnv().NODE_ENV === "production") {
-    throw new ValidationError("WhatsApp OTP delivery is not supported. Use EMAIL or SMS.");
+  if (input.activeMethod === "WHATSAPP" && getEnv().NODE_ENV === "production" && !new WhatsAppOtpProvider().isConfigured()) {
+    throw new ValidationError("WhatsApp OTP delivery is not configured. Set WHATSAPP_API_KEY, WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_OTP_TEMPLATE_NAME.");
   }
 
   const before = await otpConfigRepo.get();

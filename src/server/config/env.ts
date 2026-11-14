@@ -123,6 +123,8 @@ const envSchema = z.object({
   // Notifications — WhatsApp Cloud API / FCM HTTP v1.
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_TEMPLATE_NAME: z.string().optional(),
+  WHATSAPP_OTP_TEMPLATE_NAME: z.string().optional(), // approved Meta AUTHENTICATION template (copy-code)
+  WHATSAPP_OTP_TEMPLATE_LANG: z.string().optional(), // default "en"
   WHATSAPP_API_VERSION: z.string().optional(),
   WHATSAPP_API_BASE: z.string().optional(), // ignored in production
   FCM_PROJECT_ID: z.string().optional(),

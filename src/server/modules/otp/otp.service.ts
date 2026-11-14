@@ -36,6 +36,7 @@ import {
 } from "@/server/lib/otp-hash";
 import { missingMailerSettings } from "@/server/lib/mailer";
 import { getOtpProvider } from "./providers/factory";
+import { WhatsAppOtpProvider } from "./providers/whatsapp.provider";
 import { SmsOtpProvider } from "./providers/sms.provider";
 import * as otpConfigRepo from "./otp-config.repository";
 import * as otpRepo from "./otp.repository";
@@ -103,6 +104,7 @@ export async function requestOtp(input: RequestOtpInput): Promise<RequestOtpResu
     code,
     purpose: input.purpose,
     expirySeconds: config.otpExpirySeconds,
+    contactEmail: typeof input.metadata?.email === "string" ? input.metadata.email : undefined,
   });
 
   await otpRepo.invalidateActive(input.identifier, input.purpose);
@@ -153,6 +155,7 @@ export async function getOtpDeliveryReadiness(): Promise<OtpDeliveryReadiness> {
   if (!ready && config.enabled) {
     if (config.activeMethod === "EMAIL") missing = missingMailerSettings();
     else if (config.activeMethod === "SMS") missing = new SmsOtpProvider().missingSettings();
+    else if (config.activeMethod === "WHATSAPP") missing = new WhatsAppOtpProvider().missingSettings();
   }
   return { channel: config.activeMethod, ready, devMode: config.devMode, missing };
 }

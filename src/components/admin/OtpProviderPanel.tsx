@@ -16,9 +16,10 @@ import { AlertTriangle, Mail, MessageSquareText } from "lucide-react";
 import { useState } from "react";
 import { ActionError, Card, SuccessNote } from "./AdminUi";
 
-const ICON: Record<OtpProviderKey, typeof Mail> = { EMAIL: Mail, FAST2SMS_SMS: MessageSquareText };
+const ICON: Record<OtpProviderKey, typeof Mail> = { EMAIL: Mail, FAST2SMS_SMS: MessageSquareText, META_WHATSAPP: MessageSquareText };
 const BLURB: Record<OtpProviderKey, string> = {
   EMAIL: "Sends the code to the member's email address through the server's SMTP relay.",
+  META_WHATSAPP: "Sends the code on WhatsApp to the member's Indian mobile number (Meta Cloud API, copy-code template). If WhatsApp cannot deliver, the same code is e-mailed instead.",
   FAST2SMS_SMS: "Sends the code as an SMS to the member's Indian mobile number through Fast2SMS. Codes are generated and checked by this platform.",
 };
 
